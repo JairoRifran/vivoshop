@@ -197,14 +197,28 @@ Dos formas de alinearlos; da igual cuál, pero hay que elegir una:
 
 ### Región
 
-Railway despliega en la región de la cuenta —`EU West` por defecto— y Supabase
-quedó en `sa-east-1`. Con esa combinación **cada consulta cruza el Atlántico**:
-unos 200 ms de ida y vuelta, y el checkout hace varias dentro de una misma
-transacción.
+Fijada en `railway.json`, no en el panel:
 
-Funciona, pero no es lo que debería. Para Uruguay conviene mover el servicio a
-`us-east` o `sa-east` y quedar cerca de la base. Es un cambio de región del
-servicio, no de código.
+```json
+"multiRegionConfig": { "us-east4-eqdc4a": { "numReplicas": 1 } }
+```
+
+El primer despliegue cayó en `EU West` —la región por defecto de la cuenta—
+con Supabase en `sa-east-1`. Cada consulta cruzaba el Atlántico, y se notaba:
+
+| Endpoint | EU West | US East |
+| --- | --- | --- |
+| `/markets` (sin base) | ~640 ms | *(ver abajo)* |
+| `/stores` (una consulta) | ~1045 ms | *(ver abajo)* |
+
+Railway **no tiene región en Sudamérica**, así que Virginia es lo más cerca que
+se puede estar de São Paulo y de Uruguay a la vez. Si algún día aparece
+`sa-east`, es cambiar esa clave.
+
+**Una sola réplica, a propósito.** No es una limitación del plan: con dos, los
+presupuestos de chat —que viven en memoria del proceso— pasarían a permitir 5 ×
+instancias, y Socket.IO sin adaptador de Redis entregaría cada `emit` solo a la
+mitad de la sala. Ver [`m02.md`](m02.md) §21.
 
 ### Una sola instancia, a propósito
 
