@@ -98,7 +98,10 @@ async function main(): Promise<void> {
   }
   if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required to seed.');
 
-  const { db, pool } = createDatabase(env.DATABASE_URL);
+  const { db, pool } = createDatabase(env.DATABASE_URL, {
+    mode: env.DATABASE_SSL,
+    caCert: env.DATABASE_CA_CERT,
+  });
   try {
     await seedDatabase(db);
     console.log('Seed completo: tiendas, productos, transmisiones, pedidos y seguidores.');

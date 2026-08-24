@@ -110,7 +110,11 @@ export class MemoryPersistenceModule implements OnModuleInit {
     {
       provide: POOL,
       inject: [ENV],
-      useFactory: (env: AppEnv) => createDatabase(env.DATABASE_URL as string),
+      useFactory: (env: AppEnv) =>
+        createDatabase(env.DATABASE_URL as string, {
+          mode: env.DATABASE_SSL,
+          caCert: env.DATABASE_CA_CERT,
+        }),
     },
     {
       provide: DRIZZLE,

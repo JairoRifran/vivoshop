@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.git
+.turbo
+**/.turbo
+**/dist
+**/.next
+**/.next-e2e
+**/.next-lk
+**/coverage
+**/test-results
+**/playwright-report
+.env
+.env.local
+docker/pgdata

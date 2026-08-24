@@ -285,6 +285,21 @@ Cómo probarlo, incluido el procedimiento con dos teléfonos:
 [`docs/live-testing.md`](docs/live-testing.md). Detalle técnico:
 [`docs/m02.md`](docs/m02.md).
 
+## Despliegue
+
+Tres piezas en tres lugares, porque el gateway de WebSocket necesita un proceso
+vivo y Vercel no lo da:
+
+| Pieza | Dónde |
+| --- | --- |
+| Web (Next.js) | Vercel |
+| API (NestJS + Socket.IO) | Railway |
+| PostgreSQL | Supabase |
+| Video | LiveKit Cloud (opcional — sin él corre en `mock`) |
+
+Paso a paso, variables y estado de verificación en
+[`docs/deploy.md`](docs/deploy.md).
+
 ## Qué sigue simulado
 
 | Área | Hoy | Interfaz preparada |

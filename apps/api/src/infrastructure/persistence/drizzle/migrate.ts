@@ -16,7 +16,10 @@ async function main(): Promise<void> {
   const env = loadEnv();
   if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required to migrate.');
 
-  const { db, pool } = createDatabase(env.DATABASE_URL);
+  const { db, pool } = createDatabase(env.DATABASE_URL, {
+    mode: env.DATABASE_SSL,
+    caCert: env.DATABASE_CA_CERT,
+  });
   try {
     await migrate(db as never, { migrationsFolder: resolve(process.cwd(), 'drizzle') });
     console.log('Migraciones aplicadas.');

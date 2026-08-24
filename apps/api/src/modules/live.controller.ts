@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { asLiveSessionId, type LiveStatus } from '@vivo/domain';
 import {
@@ -121,8 +122,15 @@ export class LiveController {
    * A subscribe-only credential to watch.
    *
    * Public, because watching must never require an account: the distribution
-   * model is a link pasted into WhatsApp. Anonymous viewers get an ephemeral
-   * identity derived server-side.
+   * model is a link pasted into WhatsApp.
+   *
+   * The anonymous identity is **random per request**, not derived from the
+   * viewer's IP and user agent. That distinction only bites in production: two
+   * people on the same home Wi-Fi, the same office, or behind the same carrier
+   * NAT would hash to the same fingerprint, and a video provider treats a
+   * duplicate participant identity as a reconnection — silently kicking the
+   * first viewer out. Presence de-duplication still happens, but over the
+   * realtime socket, where it belongs.
    *
    * Returns 200 with a null payload - not an error - when the session has no
    * video yet or is already over. That is a normal state, and the client
@@ -133,28 +141,12 @@ export class LiveController {
   async viewerToken(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser | null,
-    @ViewerKey() viewerKey: string,
   ): Promise<{ credentials: unknown | null }> {
     const credentials = await this.live.issueViewerCredentials(asLiveSessionId(id), {
       userId: user?.id ?? null,
-      identityKey: `guest_${hashViewerKey(viewerKey)}`,
+      identityKey: `guest_${randomUUID().replace(/-/g, '').slice(0, 12)}`,
       displayName: user?.name ?? 'Invitado',
     });
     return { credentials };
   }
-}
-
-/**
- * Turns the viewer fingerprint into a short, stable, opaque identity.
- *
- * The raw key contains an IP and a user agent; neither should travel to a
- * video provider as a participant name.
- */
-function hashViewerKey(viewerKey: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < viewerKey.length; index += 1) {
-    hash ^= viewerKey.charCodeAt(index);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return hash.toString(36);
 }

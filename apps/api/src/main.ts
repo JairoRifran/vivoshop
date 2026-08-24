@@ -11,6 +11,13 @@ async function bootstrap(): Promise<void> {
   const env = app.get<AppEnv>(ENV);
   const logger = new Logger('Bootstrap');
 
+  if (env.TRUST_PROXY) {
+    // Behind Railway, Fly or any load balancer, every request arrives from the
+    // proxy. Without this, `request.ip` is the proxy's address and the rate
+    // limiter throttles the whole internet as if it were one visitor.
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
+
   // API-only service: no cookies, no sessions, no CSRF surface. The CSP
   // defaults helmet applies to HTML do not apply to JSON, so they are off.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));

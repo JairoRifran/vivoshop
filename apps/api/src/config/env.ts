@@ -40,6 +40,21 @@ const envSchema = z.object({
   CACHE_DRIVER: z.enum(['memory', 'redis']).default('memory'),
 
   DATABASE_URL: z.string().optional(),
+  /**
+   * How to negotiate TLS with Postgres.
+   *
+   * `auto` is the honest default: plaintext for localhost, verified TLS for
+   * anything else. A managed database is always remote, so this turns TLS on
+   * without anyone having to remember.
+   *
+   * `no-verify` encrypts but does not check the certificate chain. Supabase's
+   * direct connection presents a certificate signed by their own CA, so
+   * without `DATABASE_CA_CERT` this is what makes it connect — at the cost of
+   * being open to an active man-in-the-middle. Prefer supplying the CA.
+   */
+  DATABASE_SSL: z.enum(['auto', 'require', 'no-verify', 'disable']).default('auto'),
+  /** PEM of the CA that signed the database certificate. Verified properly. */
+  DATABASE_CA_CERT: z.string().optional(),
   REDIS_URL: z.string().optional(),
 
   /**
@@ -54,6 +69,17 @@ const envSchema = z.object({
 
   /** Comma separated list of browser origins allowed to call the API. */
   WEB_ORIGIN: z.string().default('http://localhost:3000'),
+  /**
+   * Trust `X-Forwarded-For` from one hop.
+   *
+   * On by default in production because managed hosts always sit behind a load
+   * balancer, and off locally because trusting the header when nothing strips
+   * it lets a caller pick their own IP and walk past the rate limit.
+   */
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
   RATE_LIMIT: z.coerce.number().int().min(10).default(120),
 
   // --- Live streaming (M02) --------------------------------------------
@@ -83,7 +109,15 @@ export interface AppEnv extends RawEnv {
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
-  const parsed = envSchema.safeParse(source);
+  // Most hosts (Railway, Render, Fly, Heroku) inject the port as `PORT` and
+  // expect the process to listen on it. `API_PORT` stays the name the project
+  // uses; this is just the bridge, and an explicit `API_PORT` still wins.
+  const normalized: NodeJS.ProcessEnv =
+    source.API_PORT === undefined && source.PORT !== undefined
+      ? { ...source, API_PORT: source.PORT }
+      : source;
+
+  const parsed = envSchema.safeParse(normalized);
 
   if (!parsed.success) {
     const issues = parsed.error.issues
@@ -114,6 +148,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
 
   return {
     ...env,
+    TRUST_PROXY: normalized.TRUST_PROXY === undefined
+      ? env.NODE_ENV === 'production'
+      : env.TRUST_PROXY,
     corsOrigins: env.WEB_ORIGIN.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
