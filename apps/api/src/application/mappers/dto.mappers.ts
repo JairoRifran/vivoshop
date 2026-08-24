@@ -1,29 +1,38 @@
 import { getPaymentMethod } from '@vivo/config';
 import type {
+  Dispute,
   LiveMessage,
   LiveSession,
   Order,
+  Payment,
   Product,
+  SellerPaymentAccountView,
   Store,
   User,
+  VerificationStatus,
 } from '@vivo/domain';
 import {
   discountPercent,
+  isVerified,
   priceFrom,
   ratingStars,
   totalStock,
   variantLabel,
 } from '@vivo/domain';
 import type {
+  DisputeDto,
   LiveDetailDto,
   LiveMessageDto,
   LiveSummaryDto,
   OrderDto,
+  PaymentDto,
   ProductDetailDto,
   ProductSummaryDto,
+  SellerPaymentAccountDto,
   StoreDetailDto,
   StoreSummaryDto,
   UserDto,
+  VerificationStatusDto,
 } from '@vivo/shared';
 
 /**
@@ -68,6 +77,9 @@ export function toStoreSummaryDto(store: Store, context: StoreContext = {}): Sto
     reviewCount: store.reputation.reviewCount,
     followerCount: store.followerCount,
     status: store.status,
+    // Solo el sí. `pending` y `rejected` son asunto del dueño de la tienda:
+    // publicarlos convertiría la ausencia del tick en una marca negativa.
+    isVerified: isVerified(store.verification),
     ...(context.isFollowing === undefined ? {} : { isFollowing: context.isFollowing }),
     ...(context.isLiveNow === undefined ? {} : { isLiveNow: context.isLiveNow }),
   };
@@ -93,6 +105,7 @@ export function toProductSummaryDto(product: Product, store: Store): ProductSumm
     storeId: String(product.storeId),
     storeName: store.name,
     storeSlug: store.slug,
+    storeIsVerified: isVerified(store.verification),
     title: product.title,
     priceMinor: priceFrom(product).amountMinor,
     compareAtPriceMinor: product.compareAtPriceMinor,
@@ -192,7 +205,12 @@ export function toMessageDto(message: LiveMessage): LiveMessageDto {
   };
 }
 
-export function toOrderDto(order: Order, store: Store): OrderDto {
+export function toOrderDto(
+  order: Order,
+  store: Store,
+  /** URL de pago vigente, cuando hay un cobro abierto. */
+  checkoutUrl: string | null = null,
+): OrderDto {
   const paymentMethod = getPaymentMethod(store.country, order.payment.methodId);
 
   return {
@@ -222,6 +240,7 @@ export function toOrderDto(order: Order, store: Store): OrderDto {
     tax: order.tax,
     totalMinor: order.totalMinor,
     status: order.status,
+    protection: order.protection,
     payment: {
       methodId: order.payment.methodId,
       provider: order.payment.provider,
@@ -230,6 +249,7 @@ export function toOrderDto(order: Order, store: Store): OrderDto {
       installments: order.payment.installments,
       reference: order.payment.reference,
       paidAt: order.payment.paidAt?.toISOString() ?? null,
+      checkoutUrl,
     },
     delivery: {
       methodId: order.delivery.methodId,
@@ -252,5 +272,72 @@ export function toOrderDto(order: Order, store: Store): OrderDto {
     })),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+  };
+}
+
+// --- Cobros y confianza (M03) ---------------------------------------------------
+
+export function toPaymentDto(payment: Payment): PaymentDto {
+  return {
+    id: String(payment.id),
+    orderId: payment.orderId ? String(payment.orderId) : null,
+    status: payment.status,
+    currency: payment.currency,
+    // El reparto sale del pago, congelado como se aplicó. Nunca se recalcula
+    // al leer: la política puede haber cambiado desde entonces.
+    grossMinor: payment.split.grossMinor,
+    commissionMinor: payment.split.commissionMinor,
+    commissionRateBps: payment.split.commissionRateBps,
+    commissionPolicy: payment.split.commissionPolicy,
+    netMinor: payment.split.netMinor,
+    installments: payment.installments,
+    checkoutUrl: payment.checkoutUrl,
+    createdAt: payment.createdAt.toISOString(),
+    approvedAt: payment.approvedAt?.toISOString() ?? null,
+  };
+}
+
+export function toSellerPaymentAccountDto(
+  account: SellerPaymentAccountView,
+): SellerPaymentAccountDto {
+  // Los tokens no llegan hasta acá: `toAccountView` ya los dejó afuera en el
+  // dominio, y este mapeo solo copia lo que quedó.
+  return {
+    provider: account.provider,
+    status: account.status,
+    accountLabel: account.accountLabel,
+    connectedAt: account.connectedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * El estado de una verificación, **para su dueño**.
+ *
+ * `rejectionReason` es interno y aun así viaja acá: su destinatario es
+ * exactamente quien tiene que corregir el dato. No aparece en ninguna
+ * respuesta pública.
+ */
+export function toVerificationStatusDto(verification: {
+  status: VerificationStatus;
+  submittedAt: Date | null;
+  reviewedAt: Date | null;
+  rejectionReason: string | null;
+}): VerificationStatusDto {
+  return {
+    status: verification.status,
+    submittedAt: verification.submittedAt?.toISOString() ?? null,
+    reviewedAt: verification.reviewedAt?.toISOString() ?? null,
+    rejectionReason: verification.rejectionReason,
+  };
+}
+
+export function toDisputeDto(dispute: Dispute): DisputeDto {
+  return {
+    orderId: String(dispute.orderId),
+    reason: dispute.reason,
+    status: dispute.status,
+    detail: dispute.detail,
+    openedAt: dispute.openedAt.toISOString(),
+    resolvedAt: dispute.resolvedAt?.toISOString() ?? null,
   };
 }

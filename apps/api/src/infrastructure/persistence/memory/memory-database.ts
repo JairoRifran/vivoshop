@@ -1,5 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import type { Follow, LiveMessage, LiveSession, Order, Product, Store, User } from '@vivo/domain';
+import type {
+  BusinessVerification,
+  Dispute,
+  Follow,
+  IdentityVerification,
+  LiveMessage,
+  LiveSession,
+  OAuthState,
+  Order,
+  Payment,
+  Product,
+  SellerPaymentAccount,
+  Store,
+  User,
+} from '@vivo/domain';
 import { buildDemoDataset, type DemoDataset } from '@vivo/seed';
 import type { StoredAnalyticsEvent } from '../../../application/ports/repositories';
 
@@ -40,6 +54,17 @@ export class MemoryDatabase {
   readonly idempotency = new Map<string, IdempotencyRecord>();
   readonly analytics: StoredAnalyticsEvent[] = [];
 
+  // --- Cobros y confianza (M03) --------------------------------------------
+  readonly payments = new Map<string, Payment>();
+  /** Avisos ya procesados, por `provider::eventId`. La idempotencia del webhook. */
+  readonly webhookEvents = new Map<string, Date>();
+  /** Cuentas de cobro, por `storeId::provider`. */
+  readonly sellerAccounts = new Map<string, SellerPaymentAccount>();
+  readonly oauthStates = new Map<string, OAuthState>();
+  readonly businessVerifications = new Map<string, BusinessVerification>();
+  readonly identityVerifications = new Map<string, IdentityVerification>();
+  readonly disputes = new Map<string, Dispute>();
+
   private seeded = false;
 
   static followKey(userId: string, storeId: string): string {
@@ -48,6 +73,14 @@ export class MemoryDatabase {
 
   static idempotencyKey(scope: string, key: string): string {
     return `${scope}::${key}`;
+  }
+
+  static accountKey(storeId: string, provider: string): string {
+    return `${storeId}::${provider}`;
+  }
+
+  static webhookKey(provider: string, eventId: string): string {
+    return `${provider}::${eventId}`;
   }
 
   /**
@@ -91,6 +124,13 @@ export class MemoryDatabase {
     this.follows.clear();
     this.idempotency.clear();
     this.analytics.length = 0;
+    this.payments.clear();
+    this.webhookEvents.clear();
+    this.sellerAccounts.clear();
+    this.oauthStates.clear();
+    this.businessVerifications.clear();
+    this.identityVerifications.clear();
+    this.disputes.clear();
     this.seeded = false;
   }
 }

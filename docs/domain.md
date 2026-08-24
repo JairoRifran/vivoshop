@@ -19,8 +19,20 @@ User ──owns──► Store ──has──► Product ──has──► Pro
  │                              │
  └──places──► Order ──belongs to one Store──┘ (atribución del vivo)
                 │
-                └──has──► OrderItem (snapshot inmutable)
+                ├──has──► OrderItem (snapshot inmutable)
+                │
+                └──paid by──► Payment ──splits──► PaymentSplit (comisión congelada)
+
+Store ──may have──► BusinessVerification  (otorga el ✓; opcional)
+User  ──may have──► IdentityVerification  (no otorga tick; opcional)
+Store ──may have──► SellerPaymentAccount  (con qué cobra; una por proveedor)
+Order ──may have──► Dispute               (un reclamo por pedido)
 ```
+
+Un pago **no** siempre pertenece a un pedido: `PaymentPurpose` ya contempla
+cobrar por promocionar un vivo, y en ese caso `orderId` es null. El circuito
+—intent, webhook, estado, reembolso— es el mismo, y montar un segundo sería
+absurdo.
 
 Un pedido pertenece **a una sola tienda**. El carrito multi-tienda es un no-objetivo explícito de
 M01, y la firma de `buildCheckoutDraft` lo deja escrito en el tipo en vez de en un comentario.
@@ -223,6 +235,14 @@ Funciones puras, sin I/O.
 | `assertLiveTransition` | Ídem para transmisiones |
 | `buildOrderCode` | Determinista y legible |
 | `installmentPreview` | Cuotas indicativas hasta que haya un emisor real |
+| `splitPayment` | Reparte el bruto; redondea a favor del vendedor y suma exacto |
+| `commissionPolicy` | Resuelve la política por nombre; la tasa se congela en el pago |
+| `assertPaymentTransition` | Un aviso viejo no retrocede un pago aprobado |
+| `orderStatusForPayment` | El único lugar que relaciona pago y pedido |
+| `shouldReleaseStock` | Devolver dinero no es devolver producto |
+| `protectionLevel` / `canPromiseProtection` | La UI promete exactamente lo que el proveedor sostiene |
+| `shouldAttemptRelease` | Completar el pedido **habilita** liberar; no libera |
+| `assertBusinessReviewable` | El ✓ exige datos del negocio, no la cédula de quien atiende |
 
 `buildCheckoutDraft` acepta `enforceAddress: false` para que el checkout web pueda mostrar el
 precio antes de que el comprador escriba su dirección — bloquear el precio hasta entonces hace que
@@ -244,13 +264,19 @@ El transporte mapea el código a un status HTTP; el cliente lo mapea a una frase
 
 ## Qué está probado
 
-128 tests unitarios cubren: aritmética de dinero y rechazo de mezcla de monedas, extracción de IVA
+161 tests unitarios cubren: aritmética de dinero y rechazo de mezcla de monedas, extracción de IVA
 incluido, resolución de reglas fiscales por categoría con mercados incluidos/aditivos/exentos,
 pedidos de tasa mixta, formato de claves de idempotencia y estabilidad de la huella, ambas máquinas
 de estado con sus transiciones ilegales, precios de checkout con envío, retiro y descuentos, reserva
 y liberación de stock, sobreventa, tiendas pausadas, productos no publicados, y la consistencia del
 dataset de demostración.
 
-Encima de eso, 34 tests de contrato ejercitan la creación de pedidos —stock atómico, concurrencia,
-idempotencia y rollback— **de forma idéntica contra los dos drivers de persistencia**. Ver
-[`m01.1.md`](m01.1.md).
+Desde M03, también: las seis transiciones del pago y las que están prohibidas, el reparto de la
+comisión con su redondeo a favor del vendedor, los cuatro ejes de la Compra Protegida —incluida la
+combinación válida `completed` + `pending_release`—, los tres niveles de promesa según lo que el
+proveedor soporta, y que el ✓ no se puede otorgar sin identificador tributario.
+
+Encima de eso, los tests de contrato ejercitan **de forma idéntica contra los dos drivers de
+persistencia** la creación de pedidos —stock atómico, concurrencia, idempotencia y rollback, ver
+[`m01.1.md`](m01.1.md)— y el ciclo de cobro completo —webhook idempotente, avisos simultáneos,
+aviso rancio y devolución de stock, ver [`m03.md`](m03.md)—.

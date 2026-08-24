@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { getMarket } from '@vivo/config';
@@ -15,6 +16,7 @@ import {
   asVariantId,
   assertIdempotencyKey,
   buildCheckoutDraft,
+  initialProtection,
   buildOrderCode,
   fingerprintRequest,
   idempotencyScope,
@@ -30,8 +32,9 @@ import type {
   OrderDto,
 } from '@vivo/shared';
 import { toOrderDto, toStoreSummaryDto } from '../mappers/dto.mappers';
-import type { Clock, IdGenerator, PaymentProvider } from '../ports/infrastructure';
-import type { RealtimePublisher } from '../ports/realtime';
+import type { Clock, IdGenerator } from '../ports/infrastructure';
+import type { PaymentProviderPort } from '../ports/payments';
+import { PAYMENT_PROVIDER_PORT } from '../ports/payments';
 import type {
   OrderTransaction,
   OrderTransactionRunner,
@@ -42,11 +45,9 @@ import {
   ID_GENERATOR,
   ORDER_REPOSITORY,
   ORDER_TRANSACTION_RUNNER,
-  PAYMENT_PROVIDER,
   PRODUCT_REPOSITORY,
-  REALTIME_PUBLISHER,
 } from '../ports/tokens';
-import { LiveService } from './live.service';
+import { PaymentService } from './payment.service';
 import { StoreService } from './store.service';
 
 /** Namespaced so a key can never leak across operations. */
@@ -69,16 +70,17 @@ const CREATE_ORDER_OPERATION = 'checkout.create-order';
  */
 @Injectable()
 export class CheckoutService {
+  private readonly logger = new Logger(CheckoutService.name);
+
   constructor(
     @Inject(PRODUCT_REPOSITORY) private readonly products: ProductRepository,
     @Inject(ORDER_REPOSITORY) private readonly orders: OrderRepository,
     @Inject(ORDER_TRANSACTION_RUNNER) private readonly transactions: OrderTransactionRunner,
-    @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
-    @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
+    @Inject(PAYMENT_PROVIDER_PORT) private readonly provider: PaymentProviderPort,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     private readonly storeService: StoreService,
-    private readonly liveService: LiveService,
+    private readonly payments: PaymentService,
   ) {}
 
   // --- Preview -------------------------------------------------------------
@@ -175,14 +177,15 @@ export class CheckoutService {
       return toOrderDto(existing, outcome.store);
     }
 
-    // Outside the transaction: an external call must not hold row locks.
-    const order = await this.attachPaymentIntent(outcome.order, outcome.store);
+    // Fuera de la transacción: hablar con un tercero con locks tomados es
+    // cómo se consiguen tormentas de bloqueos en producción.
+    //
+    // Y nada de anunciar la venta acá. Un pedido creado es alguien que apretó
+    // "comprar"; la venta se canta cuando el pago se aprueba, y de eso se
+    // ocupa `PaymentService` desde el webhook.
+    const checkoutUrl = await this.openPayment(outcome.order, outcome.store);
 
-    // Also outside: the seller console should learn about the sale, but a
-    // socket nobody is listening on must never fail a purchase that committed.
-    await this.announceSale(order, outcome.store);
-
-    return toOrderDto(order, outcome.store);
+    return toOrderDto(outcome.order, outcome.store, checkoutUrl);
   }
 
   private async createInsideTransaction(
@@ -287,6 +290,7 @@ export class CheckoutService {
       taxMinor: draft.totals.taxMinor,
       tax: draft.totals.tax,
       status: 'pending_payment',
+      protection: initialProtection(this.provider.capabilities()),
       payment: draft.payment,
       delivery: draft.delivery,
       buyerNote: input.buyerNote,
@@ -312,113 +316,43 @@ export class CheckoutService {
   }
 
   /**
-   * Tells the broadcast console about a sale, and everyone else that something
-   * moved.
+   * Abre el cobro y devuelve a dónde ir a pagar.
    *
-   * Two different events on purpose. The seller room gets units, revenue and
-   * the order id, because that is their own shop. The public room gets only a
-   * product title - no buyer, no amount, no order id - so the social nudge
-   * cannot leak who bought what.
+   * Un fallo acá deja un pedido `pending_payment` válido que el comprador
+   * puede reintentar, que es estrictamente mejor que deshacer una compra
+   * porque un tercero tuvo un mal minuto. El pedido ya está commiteado; esto
+   * es lo único que puede faltar.
    */
-  private async announceSale(order: Order, store: Store): Promise<void> {
-    if (!order.liveSessionId) return;
-
+  private async openPayment(order: Order, store: Store): Promise<string | null> {
     try {
-      const stats = await this.liveService.stats(order.liveSessionId);
-      await this.realtime.orderCreated(store.id, {
-        liveSessionId: String(order.liveSessionId),
-        orderId: String(order.id),
-        unitsSold: stats.unitsSold,
-        ordersCount: stats.ordersCount,
-        revenueMinor: stats.revenueMinor,
-        currency: stats.currency,
-        productTitles: order.items.map((item) => item.titleSnapshot),
-      });
-
-      const headline = order.items[0]?.titleSnapshot;
-      if (headline) {
-        await this.realtime.saleAnnounced({
-          liveSessionId: String(order.liveSessionId),
-          productTitle: headline,
-        });
-      }
-    } catch {
-      // Nothing in here is allowed to undo a committed order.
+      const payment = await this.payments.startForOrder(order, store);
+      return payment.checkoutUrl;
+    } catch (error) {
+      this.logger.warn(`No se pudo abrir el cobro del pedido ${order.id}: ${String(error)}`);
+      return null;
     }
   }
 
   /**
-   * Registers the intent with the payment provider and stores its reference.
+   * Reintenta el cobro de un pedido que quedó sin pagar.
    *
-   * A failure here leaves a valid `pending_payment` order the buyer can retry,
-   * which is strictly better than rolling back a purchase because a third
-   * party had a bad minute.
+   * Reutiliza el cobro abierto si lo hay: apretar "pagar" dos veces no crea
+   * dos cobros.
    */
-  private async attachPaymentIntent(order: Order, store: Store): Promise<Order> {
-    try {
-      const intent = await this.payments.createIntent({
-        orderId: order.id,
-        amountMinor: order.totalMinor,
-        currency: order.currency,
-        installments: order.payment.installments,
-        description: `${store.name} — ${order.items.length} artículo(s)`,
-      });
-
-      return this.orders.update({
-        ...order,
-        payment: { ...order.payment, reference: intent.reference },
-        updatedAt: this.clock.now(),
-      });
-    } catch {
-      return order;
-    }
-  }
-
-  // --- Payment settlement -----------------------------------------------------
-
-  /**
-   * Settles the simulated payment. When Mercado Pago lands this becomes a
-   * webhook handler calling the same code below the provider call, and the
-   * webhook's own delivery id becomes the idempotency key.
-   */
-  async confirmPayment(
-    buyerId: UserId,
-    orderId: OrderId,
-    outcome: 'approved' | 'rejected',
-  ): Promise<OrderDto> {
+  async startPayment(buyerId: UserId, orderId: OrderId) {
     const order = await this.orders.findById(orderId);
     if (!order || order.buyerId !== buyerId) {
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'Pedido inexistente.' });
     }
-    const store = await this.storeService.requireById(order.storeId);
-
-    // Confirming twice is a no-op, not a second payment.
-    if (order.status !== 'pending_payment') return toOrderDto(order, store);
-
-    const intent = await this.payments.confirm({
-      reference: order.payment.reference ?? String(order.id),
-      outcome,
-    });
-    const now = this.clock.now();
-
-    if (intent.status !== 'approved') {
-      const failed = await this.orders.update({
-        ...order,
-        payment: { ...order.payment, status: 'rejected' },
-        updatedAt: now,
+    if (order.status !== 'pending_payment') {
+      throw new ConflictException({
+        code: 'INVALID_ORDER_TRANSITION',
+        message: 'Este pedido ya no está esperando el pago.',
       });
-      return toOrderDto(failed, store);
     }
 
-    const paid = await this.orders.update({
-      ...order,
-      status: 'paid',
-      payment: { ...order.payment, status: 'approved', reference: intent.reference, paidAt: now },
-      timeline: [...order.timeline, { status: 'paid', at: now, note: null }],
-      updatedAt: now,
-    });
-
-    return toOrderDto(paid, store);
+    const store = await this.storeService.requireById(order.storeId);
+    return this.payments.startForOrder(order, store);
   }
 
   // --- Internals ----------------------------------------------------------------

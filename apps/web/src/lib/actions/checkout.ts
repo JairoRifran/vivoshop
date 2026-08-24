@@ -29,12 +29,14 @@ export async function previewCheckout(input: {
 }
 
 /**
- * Places the order and settles the simulated payment in one submit.
+ * Crea el pedido y manda al comprador a pagar.
  *
- * Two calls rather than one because that is the shape a real provider forces:
- * the order must exist before it can be paid, and the payment result arrives
- * separately. Keeping that split now means M02 replaces the second call with a
- * redirect and a webhook, and nothing else moves.
+ * El pedido existe antes de que exista el cobro, y el cobro se resuelve fuera
+ * de la app. Eso no es una complicacion nuestra: es la forma que tiene
+ * cualquier proveedor real, y la razon por la que el resultado no vuelve por
+ * este camino sino por el webhook.
+ *
+ * Contra pago contra entrega no hay nada que autorizar: el pedido espera.
  */
 export async function placeOrder(_previous: ActionState, form: FormData): Promise<ActionState> {
   const user = await getCurrentUser();
@@ -93,24 +95,84 @@ export async function placeOrder(_previous: ActionState, form: FormData): Promis
       idempotencyKey,
     );
 
-    // Cash on delivery has nothing to authorise: the order simply waits.
-    if (text(form, 'paymentMethodId') !== 'uy-cash-on-delivery') {
-      order = await client.orders.confirmPayment(order.id, { outcome: 'approved' });
-    }
   } catch (error) {
     return failure(error);
   }
 
   revalidatePath('/compras');
+
+  // `redirect` lanza, asi que va fuera del try: adentro lo atraparia el
+  // `catch` y el comprador veria un error despues de una compra que si se
+  // creo. Es el bug clasico de las server actions de Next.
+  const checkoutUrl = order.payment.checkoutUrl;
+  if (checkoutUrl) redirect(checkoutUrl);
+
   redirect(`/compras/${order.id}?nuevo=1`);
 }
 
-export async function payOrder(orderId: string): Promise<ActionState> {
+/**
+ * Reintenta el cobro de un pedido que quedo sin pagar.
+ *
+ * Devuelve la URL en vez de redirigir para que el boton pueda mostrar un
+ * error si el cobro no se pudo abrir. Redirigir desde aca dejaria al
+ * comprador mirando una pagina en blanco cuando el proveedor esta caido.
+ */
+export async function startPayment(orderId: string): Promise<ActionState & { url?: string }> {
   try {
     const client = await api();
-    await client.orders.confirmPayment(orderId, { outcome: 'approved' });
+    const payment = await client.orders.startPayment(orderId);
+    if (!payment.checkoutUrl) {
+      return { status: 'error', message: 'No pudimos abrir el pago. Probá de nuevo en un momento.' };
+    }
+    return { status: 'success', url: payment.checkoutUrl };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * Resuelve un cobro simulado.
+ *
+ * Solo existe con el proveedor de desarrollo; la API lo rechaza con cualquier
+ * otro. Empuja el aviso por el mismo camino que el webhook real.
+ */
+export async function simulatePayment(
+  orderId: string,
+  outcome: 'approved' | 'rejected',
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.orders.simulatePayment(orderId, { outcome });
     revalidatePath(`/compras/${orderId}`);
     revalidatePath('/compras');
+    return { status: 'success' };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** "Recibi mi compra". Cierra la operacion; no libera el dinero. */
+export async function confirmReceipt(orderId: string): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.orders.confirmReceipt(orderId);
+    revalidatePath(`/compras/${orderId}`);
+    revalidatePath('/compras');
+    return { status: 'success' };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function openDispute(
+  orderId: string,
+  reason: 'not_received' | 'wrong_item' | 'damaged' | 'not_as_described',
+  detail: string,
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.orders.openDispute(orderId, { reason, detail });
+    revalidatePath(`/compras/${orderId}`);
     return { status: 'success' };
   } catch (error) {
     return failure(error);

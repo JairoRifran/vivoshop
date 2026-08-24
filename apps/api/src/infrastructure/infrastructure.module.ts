@@ -4,12 +4,12 @@ import { ENV, type AppEnv } from '../config/env';
 import {
   CACHE_STORE,
   NOTIFICATION_PROVIDER,
-  PAYMENT_PROVIDER,
   PRESENCE_STORE,
   SHIPPING_PROVIDER,
   STORAGE_PROVIDER,
   STREAMING_PROVIDER,
 } from '../application/ports/tokens';
+import { PAYMENT_PROVIDER_PORT } from '../application/ports/payments';
 import { MemoryCacheStore } from './cache/memory-cache';
 import { MemoryPresenceStore } from './cache/memory-presence';
 import {
@@ -19,7 +19,8 @@ import {
   createRedisClient,
 } from './cache/redis-cache';
 import { LiveKitStreamingProvider } from './providers/livekit.provider';
-import { MockPaymentProvider } from './providers/mock-payment.provider';
+import { FakePaymentProvider } from './providers/fake-payment.provider';
+import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import {
   FlatRateShippingProvider,
   LocalStorageProvider,
@@ -59,7 +60,20 @@ const cacheProviders: Provider[] = [
 ];
 
 const externalProviders: Provider[] = [
-  { provide: PAYMENT_PROVIDER, useClass: MockPaymentProvider },
+  FakePaymentProvider,
+  {
+    /**
+     * Elegido por configuracion, no por build.
+     *
+     * `fake` es el default para que un clon del repositorio arranque sin que
+     * nadie entregue credenciales; `mercadopago` exige las tres, y `env.ts` lo
+     * valida al arrancar en vez de dejar que falle el primer cobro.
+     */
+    provide: PAYMENT_PROVIDER_PORT,
+    inject: [ENV, FakePaymentProvider],
+    useFactory: (env: AppEnv, fake: FakePaymentProvider) =>
+      env.PAYMENT_PROVIDER === 'mercadopago' ? new MercadoPagoProvider(env) : fake,
+  },
   MockStreamingProvider,
   {
     // Chosen by configuration, not by build. `mock` is the default so a fresh
@@ -86,7 +100,8 @@ const persistence = PersistenceModule.register();
   exports: [
     CACHE_STORE,
     PRESENCE_STORE,
-    PAYMENT_PROVIDER,
+    PAYMENT_PROVIDER_PORT,
+    FakePaymentProvider,
     STREAMING_PROVIDER,
     NOTIFICATION_PROVIDER,
     SHIPPING_PROVIDER,

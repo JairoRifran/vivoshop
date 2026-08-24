@@ -1,4 +1,9 @@
-import { PRODUCT_STATUSES, STORE_CATEGORIES, ORDER_STATUSES } from '@vivo/domain';
+import {
+  DISPUTE_REASONS,
+  ORDER_STATUSES,
+  PRODUCT_STATUSES,
+  STORE_CATEGORIES,
+} from '@vivo/domain';
 import { z } from 'zod';
 import { addressSchema } from './entities';
 import {
@@ -168,14 +173,16 @@ export const idempotencyKeySchema = z
   .regex(/^[A-Za-z0-9_:.-]{8,128}$/, 'Referencia de pedido inválida');
 
 /**
- * M01 settles payments with a simulated provider. The shape already matches
- * what a real PaymentProvider callback will carry, so wiring Mercado Pago is a
- * provider swap rather than an API change.
+ * Desenlace de un cobro **simulado**.
+ *
+ * Solo lo acepta el entorno de desarrollo, y solo el proveedor `fake`. Con un
+ * proveedor real quien decide es el webhook: si esto siguiera abierto sería un
+ * botón público para marcar pedidos como pagos.
  */
-export const confirmPaymentRequestSchema = z.object({
+export const simulatePaymentRequestSchema = z.object({
   outcome: z.enum(['approved', 'rejected']).default('approved'),
 });
-export type ConfirmPaymentRequest = z.infer<typeof confirmPaymentRequestSchema>;
+export type SimulatePaymentRequest = z.infer<typeof simulatePaymentRequestSchema>;
 
 export const updateOrderStatusRequestSchema = z.object({
   status: z.enum(ORDER_STATUSES),
@@ -191,3 +198,44 @@ export const analyticsEventRequestSchema = z.object({
   occurredAt: isoDateSchema.optional(),
 });
 export type AnalyticsEventRequest = z.infer<typeof analyticsEventRequestSchema>;
+
+// --- Cobros y confianza (M03) ---------------------------------------------------
+
+/**
+ * Datos del **negocio**, para el ✓ Tienda Verificada.
+ *
+ * El identificador tributario es obligatorio acá y en ningún otro lado del
+ * producto: es lo que separa un comercio formal de una persona que vende, y
+ * sin él el tick estaría afirmando algo que nadie comprobó. Pedirlo para
+ * verificarse no lo vuelve necesario para vender — vender no pasa por este
+ * formulario.
+ */
+export const businessVerificationRequestSchema = z.object({
+  legalName: z.string().trim().min(2).max(120),
+  taxId: z.string().trim().min(6).max(24),
+  responsibleName: z.string().trim().min(2).max(120),
+  responsibleDocument: z.string().trim().min(4).max(32),
+  commercialAddress: z.string().trim().min(6).max(200),
+  contactPhone: z.string().trim().min(6).max(24),
+  contactEmail: z.string().trim().email().max(160),
+});
+export type BusinessVerificationRequest = z.infer<typeof businessVerificationRequestSchema>;
+
+/**
+ * Identidad de una persona. No otorga tick y no pide nada del negocio: un
+ * vendedor particular puede verificar quién es sin tener RUT.
+ */
+export const identityVerificationRequestSchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  documentNumber: z.string().trim().min(4).max(32),
+  documentType: z.string().trim().min(2).max(24),
+  phone: z.string().trim().min(6).max(24),
+  email: z.string().trim().email().max(160),
+});
+export type IdentityVerificationRequest = z.infer<typeof identityVerificationRequestSchema>;
+
+export const openDisputeRequestSchema = z.object({
+  reason: z.enum(DISPUTE_REASONS),
+  detail: z.string().trim().max(600).default(''),
+});
+export type OpenDisputeRequest = z.infer<typeof openDisputeRequestSchema>;

@@ -98,6 +98,30 @@ const envSchema = z.object({
   /** Broadcaster credentials outlive a long live; viewers refresh cheaply. */
   LIVEKIT_BROADCASTER_TTL_SECONDS: z.coerce.number().int().min(300).default(6 * 3600),
   LIVEKIT_VIEWER_TTL_SECONDS: z.coerce.number().int().min(300).default(2 * 3600),
+
+  // --- Cobros (M03) -----------------------------------------------------
+  /**
+   * `fake` no necesita cuenta, credenciales ni internet, que es por qué es el
+   * default: un clon del repositorio tiene que arrancar sin que nadie entregue
+   * secretos. `mercadopago` es el camino real.
+   */
+  PAYMENT_PROVIDER: z.enum(['fake', 'mercadopago']).default('fake'),
+  /** Identificador publico de la aplicacion. Se puede loguear. */
+  MERCADOPAGO_CLIENT_ID: z.string().optional(),
+  /** Nunca sale del servidor. Nunca se loguea. Nunca va a un navegador. */
+  MERCADOPAGO_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Credencial de la aplicacion para operaciones que no son de un vendedor.
+   *
+   * En TEST empieza con `TEST-`; el arranque avisa cuando no lo hace, porque
+   * confundir sandbox con produccion es la forma de cobrarle de verdad a
+   * alguien que estaba probando.
+   */
+  MERCADOPAGO_ACCESS_TOKEN: z.string().optional(),
+  /** Secreto de firma de los webhooks, del panel de Mercado Pago. */
+  MERCADOPAGO_WEBHOOK_SECRET: z.string().optional(),
+  /** Base publica de la API, para armar el callback de OAuth y el webhook. */
+  API_PUBLIC_URL: z.string().default('http://localhost:4000'),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -140,6 +164,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     );
     if (missing.length > 0) {
       throw new Error(`STREAMING_PROVIDER=livekit requires ${missing.join(', ')}`);
+    }
+  }
+  if (env.PAYMENT_PROVIDER === 'mercadopago') {
+    const missing = (
+      ['MERCADOPAGO_CLIENT_ID', 'MERCADOPAGO_CLIENT_SECRET', 'MERCADOPAGO_ACCESS_TOKEN'] as const
+    ).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      throw new Error(`PAYMENT_PROVIDER=mercadopago requires ${missing.join(', ')}`);
     }
   }
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.startsWith('dev-only')) {

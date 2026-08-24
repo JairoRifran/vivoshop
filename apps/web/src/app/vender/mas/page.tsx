@@ -49,13 +49,30 @@ export default async function SellerMorePage() {
         </dl>
       </section>
 
+      <section className="flex flex-col gap-2 px-4">
+        <h2 className="text-[17px] font-extrabold tracking-tight">Cobros y confianza</h2>
+        <div className="flex flex-col divide-y divide-line rounded-3xl bg-surface px-4 shadow-card">
+          <Entry
+            href="/vender/cobros"
+            label="Cobros"
+            note="Cómo recibís el dinero de tus ventas"
+          />
+          <Entry
+            href="/vender/verificacion"
+            label="Verificación"
+            /* "Opcional" en la propia entrada del menú: es donde alguien decide
+               si tiene que entrar, y no queremos que crea que sí. */
+            note={store.isVerified ? 'Tu tienda está verificada' : 'Opcional — para el ✓'}
+          />
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2 px-4 pb-2">
         <h2 className="text-[17px] font-extrabold tracking-tight">Próximamente</h2>
         <ul className="flex flex-col divide-y divide-line rounded-3xl bg-surface px-4 shadow-card">
-          <Upcoming label="Cobros con Mercado Pago" note="M02" />
-          <Upcoming label="Transmisión de video real" note="M02" />
-          <Upcoming label="Etiquetas de envío" note="M03" />
-          <Upcoming label="Notificaciones push" note="M03" />
+          <Upcoming label="Etiquetas de envío" note="M04" />
+          <Upcoming label="Notificaciones push" note="M04" />
+          <Upcoming label="Modo puja en vivo" note="M04" />
         </ul>
 
         <Link
@@ -86,6 +103,21 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-[14px] text-subtle">{label}</dt>
       <dd className="truncate text-[14px] font-semibold">{value}</dd>
     </div>
+  );
+}
+
+function Entry({ href, label, note }: { href: string; label: string; note: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-3 py-3.5 transition-colors hover:bg-muted/50"
+    >
+      <span className="min-w-0">
+        <span className="block text-[15px] font-bold">{label}</span>
+        <span className="block truncate text-[13px] text-subtle">{note}</span>
+      </span>
+      <ChevronRightIcon className="size-5 shrink-0 text-subtle" />
+    </Link>
   );
 }
 

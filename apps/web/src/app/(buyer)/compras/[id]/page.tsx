@@ -6,6 +6,9 @@ import { notFound, redirect } from 'next/navigation';
 import { ChevronLeftIcon, StoreIcon, TruckIcon } from '@/components/icons';
 import { OrderActions } from '@/components/order-actions';
 import { OrderTimeline } from '@/components/order-timeline';
+import { ProtectionNotice } from '@/components/protection-notice';
+import { SimulatedPayment } from '@/components/simulated-payment';
+import { VerifiedBadge } from '@/components/verified-badge';
 import { api, getCurrentUser } from '@/lib/api';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, dateTime, money } from '@/lib/format';
 
@@ -17,23 +20,38 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ nuevo?: string }>;
+  searchParams: Promise<{ nuevo?: string; pago?: string; simular?: string }>;
 }) {
-  const [{ id }, { nuevo }] = await Promise.all([params, searchParams]);
+  const [{ id }, query] = await Promise.all([params, searchParams]);
 
   const user = await getCurrentUser();
   if (!user) redirect(`/ingresar?next=${encodeURIComponent(`/compras/${id}`)}`);
 
   const client = await api();
   let order;
+  let capabilities;
   try {
-    order = await client.orders.byId(id);
+    // Las dos consultas son independientes; en secuencia serian dos viajes.
+    [order, capabilities] = await Promise.all([
+      client.orders.byId(id),
+      client.payments.capabilities(),
+    ]);
   } catch (error) {
     if (isApiError(error) && error.isNotFound) notFound();
     throw error;
   }
 
-  const justPlaced = nuevo === '1';
+  const justPlaced = query.nuevo === '1';
+  // El proveedor simulado vuelve a esta pantalla con `?simular=`. Con un
+  // proveedor real el parametro no existe y el panel no se dibuja.
+  const simulating = Boolean(query.simular) && order.status === 'pending_payment';
+  // La vuelta del proveedor **no** decide nada: dice que el comprador volvio,
+  // no que se cobro. El parametro solo elige si vale la pena explicar lo que
+  // paso; lo que se afirma sale del estado guardado, no de la URL.
+  const paymentFailed =
+    query.pago === 'rechazado' &&
+    order.status === 'cancelled' &&
+    order.payment.status !== 'approved';
 
   return (
     <div className="flex flex-col gap-6 pb-6 pt-safe">
@@ -52,6 +70,21 @@ export default async function OrderDetailPage({
           <p className="text-[13px] text-subtle">{dateTime(order.createdAt)}</p>
         </div>
       </header>
+
+      {simulating ? <SimulatedPayment orderId={order.id} /> : null}
+
+      {paymentFailed ? (
+        <div role="status" className="mx-4 rounded-3xl bg-danger/8 px-4 py-4">
+          <p className="text-[15px] font-extrabold text-danger">No se pudo completar el pago</p>
+          <p className="text-[13px] leading-relaxed text-ink-soft">
+            {/* Honesto sobre lo que pasó de verdad: el pedido se cancela y las
+                unidades vuelven a la tienda. Decir "seguí intentando" sería
+                prometer una reserva que ya no existe. */}
+            Cancelamos el pedido y las unidades volvieron a {order.store.name}. Podés comprarlo de
+            nuevo cuando quieras.
+          </p>
+        </div>
+      ) : null}
 
       {justPlaced ? (
         <div
@@ -73,15 +106,26 @@ export default async function OrderDetailPage({
       <section className="mx-4 flex flex-col gap-4 rounded-3xl bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-2">
           <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABEL[order.status]}</Badge>
-          <Link
-            href={`/tienda/${order.store.slug}`}
-            className="text-[13px] font-bold text-ink underline underline-offset-4"
-          >
-            {order.store.name}
-          </Link>
+          <span className="flex min-w-0 items-center gap-1">
+            <Link
+              href={`/tienda/${order.store.slug}`}
+              className="truncate text-[13px] font-bold text-ink underline underline-offset-4"
+            >
+              {order.store.name}
+            </Link>
+            {order.store.isVerified ? <VerifiedBadge size="sm" /> : null}
+          </span>
         </div>
         <OrderTimeline order={order} />
       </section>
+
+      {order.protection === 'not_applicable' ? null : (
+        <ProtectionNotice
+          capabilities={capabilities}
+          status={order.protection}
+          className="mx-4"
+        />
+      )}
 
       <section className="mx-4 flex flex-col gap-3 rounded-3xl bg-surface p-4 shadow-card">
         <h2 className="text-[15px] font-extrabold">
@@ -185,8 +229,10 @@ export default async function OrderDetailPage({
         <OrderActions
           orderId={order.id}
           status={order.status}
+          protection={order.protection}
           storeSlug={order.store.slug}
           liveSessionId={order.liveSessionId}
+          canDispute={capabilities.supportsDisputes}
         />
       </div>
     </div>

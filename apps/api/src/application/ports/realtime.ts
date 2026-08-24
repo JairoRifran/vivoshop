@@ -3,6 +3,7 @@ import type {
   LiveSessionId,
   LiveStatePayload,
   OrderCreatedPayload,
+  PaymentApprovedPayload,
   ProductFeaturedPayload,
   ReactionBurstPayload,
   SaleAnnouncedPayload,
@@ -32,6 +33,14 @@ export interface RealtimePublisher {
 
   /** Private to the seller's console. Never reaches viewers. */
   orderCreated(storeId: StoreId, payload: OrderCreatedPayload): Promise<void>;
+
+  /**
+   * "Venta confirmada": el pago se aprobó de verdad. Privado del vendedor.
+   *
+   * Separado de `orderCreated` porque son hechos distintos. Un pedido creado
+   * es alguien que apretó "comprar"; esto es plata que existe.
+   */
+  paymentApproved(storeId: StoreId, payload: PaymentApprovedPayload): Promise<void>;
 
   /** Public and anonymised: "alguien compró X". Carries no buyer data. */
   saleAnnounced(payload: SaleAnnouncedPayload): Promise<void>;

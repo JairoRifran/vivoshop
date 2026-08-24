@@ -101,6 +101,10 @@ export class StoreService {
       city: input.city?.trim() || null,
       reputation: { ratingBps: 0, reviewCount: 0, salesCount: 0 },
       followerCount: 0,
+      // Una tienda nace sin verificar y así se queda hasta que su dueño
+      // decida pedir el ✓, que es opcional. Nada de lo que sigue —cargar
+      // productos, transmitir, vender, cobrar— depende de este campo.
+      verification: 'unverified',
       status: 'active',
       settings: {
         ...DEFAULT_STORE_SETTINGS,

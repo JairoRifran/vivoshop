@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ADD COLUMN "protection_status" text DEFAULT 'not_applicable' NOT NULL;--> statement-breakpoint
+ALTER TABLE "stores" ADD COLUMN "verification_status" text DEFAULT 'unverified' NOT NULL;

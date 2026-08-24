@@ -11,6 +11,7 @@ import { track } from '@/lib/analytics';
 import { money, viewers } from '@/lib/format';
 import { useViewerStream, type StreamCredentials } from '@/lib/live-media';
 import { useLiveRealtime } from '@/lib/realtime';
+import { VerifiedMark } from '../verified-badge';
 import { FollowButton } from '../follow-button';
 import { LiveChatComposer, LiveChatOverlay } from './live-chat';
 import { VideoStage } from './video-stage';
@@ -308,6 +309,7 @@ export function LiveViewer({ session: initial, initialMessages, signedIn, realti
             >
               <Avatar src={session.store.logoUrl} name={session.store.name} size={30} />
               <span className="truncate text-[13px] font-bold">{session.store.name}</span>
+              {session.store.isVerified ? <VerifiedMark className="size-4 text-white" /> : null}
             </a>
             <FollowButton
               storeId={session.store.id}

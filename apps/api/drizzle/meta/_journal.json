@@ -36,6 +36,13 @@
       "when": 1787588049633,
       "tag": "0004_m03_payments_and_trust",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787592204929,
+      "tag": "0005_m03_verification_and_protection",
+      "breakpoints": true
     }
   ]
 }

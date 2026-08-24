@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getMarket } from '@vivo/config';
 import { isApiError } from '@vivo/shared';
 import type { Metadata } from 'next';
@@ -83,6 +84,9 @@ export default async function CheckoutPage({
           regions={[...market.address.regions]}
           initialPreview={preview}
           liveSessionId={vivo ?? null}
+          /* Una por carga de pantalla: los reintentos de *este* checkout la
+             comparten, y abrir el checkout de nuevo empieza de cero. */
+          idempotencyKey={`chk-${randomUUID()}`}
         />
       </main>
     </div>

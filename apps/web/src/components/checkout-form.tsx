@@ -3,7 +3,7 @@
 import type { DeliveryMethodConfig, PaymentMethodConfig, Region } from '@vivo/config';
 import type { CheckoutPreviewDto, ProductDetailDto, StoreDetailDto, UserDto } from '@vivo/shared';
 import { Button, SelectField, TextArea, TextInput, cn } from '@vivo/ui';
-import { useActionState, useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { placeOrder, previewCheckout } from '@/lib/actions/checkout';
 import { IDLE } from '@/lib/actions/state';
 import { money } from '@/lib/format';
@@ -20,6 +20,20 @@ interface Props {
   regions: Region[];
   initialPreview: CheckoutPreviewDto;
   liveSessionId: string | null;
+  /**
+   * Una clave por pantalla de checkout, emitida por el servidor.
+   *
+   * Emitida arriba y no derivada acá a proposito. Derivarla del contenido
+   * —tienda, producto, variante, cantidad— parecia suficiente y no lo era: el
+   * mismo comprador volviendo a comprar el mismo producto reusaba la clave y
+   * la API le contestaba `IDEMPOTENCY_CONFLICT` porque el resto del pedido
+   * habia cambiado. Una clave tiene que identificar *este intento*, no *esta
+   * compra*, y solo el servidor puede emitir algo asi sin romper la
+   * hidratacion.
+   *
+   * Sigue siendo comodidad, no proteccion: la garantia vive en la API.
+   */
+  idempotencyKey: string;
 }
 
 const DELIVERY_ICON = {
@@ -49,27 +63,9 @@ export function CheckoutForm({
   regions,
   initialPreview,
   liveSessionId,
+  idempotencyKey,
 }: Props) {
   const [state, action, submitting] = useActionState(placeOrder, IDLE);
-
-  /**
-   * One key per checkout attempt, generated when the screen mounts and reused
-   * for every retry of *this* purchase.
-   *
-   * `useId` gives a value that is stable across re-renders and identical on
-   * server and client, so there is no hydration mismatch and no `Math.random`
-   * during render. Combined with the buyer, the store and the payload it is
-   * unique enough for the server to recognise a retry.
-   *
-   * This is convenience, not protection. The guarantee lives in the API: even
-   * a client that generated a fresh key on every tap could only ever create
-   * one order per key, and the disabled button below is pure UX.
-   */
-  const attemptId = useId().replace(/[^A-Za-z0-9_-]/g, '');
-  const idempotencyKey = useMemo(
-    () => `chk-${store.id}-${product.id}-${variantId}-${quantity}-${attemptId}`.slice(0, 128),
-    [store.id, product.id, variantId, quantity, attemptId],
-  );
 
   // Guards the window between the tap and React marking the action pending.
   const submitGuard = useRef(false);

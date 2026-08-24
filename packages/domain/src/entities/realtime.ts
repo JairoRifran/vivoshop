@@ -27,6 +27,7 @@ export const REALTIME_EVENTS = {
   reactionBurst: 'reaction.burst',
   productFeatured: 'product.featured',
   orderCreated: 'order.created',
+  paymentApproved: 'payment.approved',
   saleAnnounced: 'sale.announced',
 } as const;
 
@@ -96,6 +97,27 @@ export interface OrderCreatedPayload {
 }
 
 /**
+ * Durable y **privado del vendedor**: el pago se aprobó de verdad.
+ *
+ * Separado de `order.created` porque son dos hechos distintos y confundirlos
+ * es exactamente lo que este milestone viene a arreglar. Un pedido creado es
+ * alguien que apretó "comprar"; un pago aprobado es plata que existe. La
+ * consola del vendedor canta "Venta confirmada" solo con esto.
+ */
+export interface PaymentApprovedPayload {
+  /** Null cuando la compra no salió de un vivo. */
+  readonly liveSessionId: string | null;
+  readonly orderId: string;
+  readonly orderCode: string;
+  readonly currency: string;
+  /** Lo que pagó el comprador. */
+  readonly grossMinor: number;
+  /** Lo que le queda al vendedor después de la comisión de VivoShop. */
+  readonly netMinor: number;
+  readonly productTitles: readonly string[];
+}
+
+/**
  * Ephemeral and public: the social nudge everyone sees. Deliberately carries
  * no buyer, no order id and no amount — only that a product moved.
  */
@@ -111,6 +133,7 @@ export interface RealtimeEventMap {
   'reaction.burst': ReactionBurstPayload;
   'product.featured': ProductFeaturedPayload;
   'order.created': OrderCreatedPayload;
+  'payment.approved': PaymentApprovedPayload;
   'sale.announced': SaleAnnouncedPayload;
 }
 

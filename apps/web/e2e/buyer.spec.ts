@@ -4,7 +4,7 @@ import { DEMO, expectNoHorizontalScroll, failOnConsoleErrors, signIn } from './s
 /**
  * The buyer journey the product exists for:
  *
- *   home → live → featured product → variant → checkout → payment → order
+ *   home → live → featured product → variant → checkout → provider → order
  *
  * It is one test on purpose. Splitting it would let a broken middle step pass
  * because a later test seeded its own state; here every step depends on the
@@ -55,9 +55,19 @@ test('a buyer discovers a live, buys from it and finds the order', async ({ page
   await page.getByLabel('Teléfono').fill('099 123 456');
   await pay.click();
 
-  // --- Confirmation ---------------------------------------------------------------
+  // --- Fuera de la app, con el proveedor -------------------------------------------
+  // Pagar sale de VivoShop. En desarrollo el proveedor simulado devuelve al
+  // pedido con una pantalla que pregunta el desenlace; con Mercado Pago sería
+  // su checkout. En los dos casos, quien marca el pedido como pago es el
+  // webhook, no esta pantalla.
   await page.waitForURL(/\/compras\//, { timeout: 20_000 });
-  await expect(page.getByText('¡Compra confirmada!')).toBeVisible();
+  await expect(page.getByText('Pago de prueba')).toBeVisible();
+  await expect(page.getByText('¡Compra confirmada!')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+
+  // --- Confirmation ---------------------------------------------------------------
+  await expect(page.getByText('¡Compra confirmada!')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: /Pedido VV-/ })).toBeVisible();
   await expect(page.getByText('Pagado').first()).toBeVisible();
 
@@ -108,7 +118,36 @@ test('con envío a domicilio, el formulario avisa qué falta en vez de no hacer 
 
   await pay.click();
   await page.waitForURL(/\/compras\//, { timeout: 25_000 });
-  await expect(page.getByText('¡Compra confirmada!')).toBeVisible();
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await expect(page.getByText('¡Compra confirmada!')).toBeVisible({ timeout: 20_000 });
+});
+
+/**
+ * Un pago rechazado cancela el pedido y lo explica sin tecnicismos.
+ *
+ * Es el caso que M03 hace posible por primera vez: antes el pago simulado
+ * siempre salía bien, así que el camino de "no se pudo cobrar" nunca se
+ * ejercitaba desde el navegador. Que el stock vuelva a la góndola lo prueban
+ * los tests de contrato, contra los dos drivers.
+ */
+test('un pago rechazado cancela el pedido y lo explica', async ({ page }) => {
+  await signIn(page, DEMO.buyer, '/');
+
+  await page.goto('/producto/campera-roma');
+  await page.getByRole('button', { name: 'Comprar ahora' }).click();
+  await page.waitForURL(/\/checkout/);
+  await page.getByText('Retiro en la tienda').click();
+  await page.getByLabel('Teléfono').fill('099 123 456');
+  await page.getByRole('button', { name: /^Pagar/ }).click();
+
+  await page.waitForURL(/\/compras\//, { timeout: 25_000 });
+  await page.getByRole('button', { name: 'Rechazar el pago' }).click();
+
+  // Nada de "PAYMENT_REJECTED" ni de códigos del proveedor.
+  await expect(page.getByText('No se pudo completar el pago')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('¡Compra confirmada!')).toHaveCount(0);
+  // Ni el código del proveedor ni el nuestro llegan a la pantalla.
+  await expect(page.getByText(/PAYMENT_|simulated_rejection/)).toHaveCount(0);
 });
 
 test('buying while signed out asks to sign in and keeps the intent', async ({ page }) => {

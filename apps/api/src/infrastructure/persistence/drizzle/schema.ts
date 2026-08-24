@@ -67,6 +67,14 @@ export const stores = pgTable(
     reviewCount: integer('review_count').notNull().default(0),
     salesCount: integer('sales_count').notNull().default(0),
     followerCount: integer('follower_count').notNull().default(0),
+    /**
+     * Copia del estado de `business_verifications`.
+     *
+     * Denormalizado porque el ✓ se dibuja en cada grilla y resolverlo con un
+     * join por tienda sería pagar una consulta por un adorno. La fila de
+     * verificación sigue siendo la fuente de verdad.
+     */
+    verificationStatus: text('verification_status').notNull().default('unverified'),
     status: text('status').notNull().default('active'),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -233,6 +241,8 @@ export const orders = pgTable(
     taxLabel: text('tax_label').notNull().default('IVA'),
     totalMinor: integer('total_minor').notNull(),
     status: text('status').notNull().default('pending_payment'),
+    /** Eje de Compra Protegida. Ver `@vivo/domain/entities/protection`. */
+    protectionStatus: text('protection_status').notNull().default('not_applicable'),
     payment: jsonb('payment').$type<Record<string, unknown>>().notNull(),
     delivery: jsonb('delivery').$type<Record<string, unknown>>().notNull(),
     buyerNote: text('buyer_note'),

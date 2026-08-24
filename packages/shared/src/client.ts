@@ -6,10 +6,15 @@ import type {
   LiveMessageDto,
   LiveStatsDto,
   LiveSummaryDto,
+  DisputeDto,
   OrderDto,
+  PaymentCapabilitiesDto,
+  PaymentDto,
   ProductDetailDto,
   ProductSummaryDto,
   SellerMetricsDto,
+  SellerPaymentAccountDto,
+  VerificationStatusDto,
   SessionDto,
   StoreDetailDto,
   StoreSummaryDto,
@@ -18,7 +23,10 @@ import type {
   ViewerTokenResponseDto,
 } from './schemas/entities';
 import type {
-  ConfirmPaymentRequest,
+  BusinessVerificationRequest,
+  IdentityVerificationRequest,
+  OpenDisputeRequest,
+  SimulatePaymentRequest,
   CreateLiveRequest,
   CreateOrderRequest,
   CreateProductRequest,
@@ -209,8 +217,22 @@ export function createApiClient(options: ApiClientOptions) {
         request<OrderDto>('POST', `/checkout/${storeId}/orders`, input, {
           headers: { 'Idempotency-Key': idempotencyKey },
         }),
-      confirmPayment: (orderId: string, input: ConfirmPaymentRequest) =>
-        request<OrderDto>('POST', `/orders/${orderId}/payment`, input),
+      /**
+       * Abre (o recupera) el cobro de un pedido y devuelve a dónde ir a pagar.
+       *
+       * No confirma nada: quien confirma es el webhook del proveedor. El
+       * nombre lo dice a propósito, porque el método anterior se llamaba
+       * `confirmPayment` y esa palabra era justamente el error.
+       */
+      startPayment: (orderId: string) =>
+        request<PaymentDto>('POST', `/orders/${orderId}/payment`),
+      /** Solo desarrollo, solo con el proveedor simulado. */
+      simulatePayment: (orderId: string, input: SimulatePaymentRequest) =>
+        request<OrderDto>('POST', `/orders/${orderId}/payment/simulate`, input),
+      openDispute: (orderId: string, input: OpenDisputeRequest) =>
+        request<DisputeDto>('POST', `/orders/${orderId}/dispute`, input),
+      confirmReceipt: (orderId: string) =>
+        request<OrderDto>('POST', `/orders/${orderId}/receipt`),
       mine: (query?: Query, init?: RequestInit) =>
         request<OrderDto[]>('GET', '/orders', undefined, { ...init, query }),
       byId: (id: string, init?: RequestInit) =>
@@ -225,6 +247,41 @@ export function createApiClient(options: ApiClientOptions) {
     seller: {
       metrics: (init?: RequestInit) =>
         request<SellerMetricsDto>('GET', '/seller/metrics', undefined, init),
+    },
+
+    payments: {
+      /** Lo que la UI puede prometer. Ver `paymentCapabilitiesSchema`. */
+      capabilities: (init?: RequestInit) =>
+        request<PaymentCapabilitiesDto>('GET', '/payments/capabilities', undefined, init),
+      account: (init?: RequestInit) =>
+        request<SellerPaymentAccountDto | null>(
+          'GET',
+          '/seller/payments/account',
+          undefined,
+          init,
+        ),
+      connect: () =>
+        request<{ authorizationUrl: string }>('POST', '/seller/payments/connect'),
+      disconnect: () => request<void>('DELETE', '/seller/payments/account'),
+      list: (query?: Query, init?: RequestInit) =>
+        request<PaymentDto[]>('GET', '/seller/payments', undefined, { ...init, query }),
+    },
+
+    verification: {
+      /** Estado de la verificación comercial de mi tienda. */
+      business: (init?: RequestInit) =>
+        request<VerificationStatusDto | null>(
+          'GET',
+          '/seller/verification/business',
+          undefined,
+          init,
+        ),
+      submitBusiness: (input: BusinessVerificationRequest) =>
+        request<VerificationStatusDto>('POST', '/seller/verification/business', input),
+      identity: (init?: RequestInit) =>
+        request<VerificationStatusDto | null>('GET', '/me/verification', undefined, init),
+      submitIdentity: (input: IdentityVerificationRequest) =>
+        request<VerificationStatusDto>('POST', '/me/verification', input),
     },
 
     analytics: {

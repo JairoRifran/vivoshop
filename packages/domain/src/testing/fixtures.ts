@@ -25,6 +25,7 @@ export function makeStore(overrides: Partial<Store> = {}): Store {
     city: 'Montevideo',
     reputation: { ratingBps: 480, reviewCount: 124, salesCount: 890 },
     followerCount: 1240,
+    verification: 'unverified',
     status: 'active',
     settings: DEFAULT_STORE_SETTINGS,
     createdAt: AT,

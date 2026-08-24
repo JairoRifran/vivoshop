@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { money, scheduleLabel, viewers } from '@/lib/format';
 import { STORE_CATEGORY_LABEL } from '@/lib/format';
 import { EyeIcon } from './icons';
+import { VerifiedMark } from './verified-badge';
 
 /**
  * Shared media frame.
@@ -90,6 +91,7 @@ export function LiveCard({
         <div className="flex items-center gap-2">
           <Avatar src={session.store.logoUrl} name={session.store.name} size={24} />
           <span className="truncate text-xs font-bold text-white/95">{session.store.name}</span>
+          {session.store.isVerified ? <VerifiedMark className="size-3.5 text-white" /> : null}
         </div>
         <p className="line-clamp-2 text-[13px] font-semibold leading-tight text-white">
           {session.title}
@@ -129,6 +131,7 @@ export function LiveRowCard({ session }: { session: LiveSummaryDto }) {
         <div className="flex items-center gap-2">
           <Avatar src={session.store.logoUrl} name={session.store.name} size={22} />
           <span className="truncate text-[13px] font-bold">{session.store.name}</span>
+          {session.store.isVerified ? <VerifiedMark className="size-3.5" /> : null}
           {session.store.city ? (
             <span className="truncate text-xs text-subtle">· {session.store.city}</span>
           ) : null}
@@ -224,7 +227,12 @@ export function StoreRow({ store }: { store: StoreSummaryDto }) {
         ) : null}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-bold">{store.name}</p>
+        <p className="flex items-center gap-1 truncate text-[15px] font-bold">
+          <span className="truncate">{store.name}</span>
+          {/* Solo el si. No hay marca para "sin verificar": una tienda de un
+              vendedor particular se ve igual que siempre. */}
+          {store.isVerified ? <VerifiedMark /> : null}
+        </p>
         <p className="truncate text-xs text-subtle">
           {STORE_CATEGORY_LABEL[store.category] ?? store.category}
           {store.city ? ` · ${store.city}` : ''} · ★ {store.rating.toFixed(1)}

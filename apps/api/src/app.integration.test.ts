@@ -282,8 +282,10 @@ describe('checkout', () => {
     expect(created.body.code).toMatch(/^VV-/);
     expect(created.body.payment.installments).toBe(6);
 
+    // El pago no lo confirma el navegador: el endpoint de simulación empuja
+    // el aviso por el mismo camino que el webhook del proveedor.
     const paid = await http()
-      .post(`/orders/${created.body.id}/payment`)
+      .post(`/orders/${created.body.id}/payment/simulate`)
       .set(auth)
       .send({ outcome: 'approved' })
       .expect(201);
@@ -481,7 +483,7 @@ describe('seller surface', () => {
     expect(tooSoon.body.code).toBe('INVALID_ORDER_TRANSITION');
 
     await http()
-      .post(`/orders/${created.body.id}/payment`)
+      .post(`/orders/${created.body.id}/payment/simulate`)
       .set('Authorization', `Bearer ${buyerToken}`)
       .send({ outcome: 'approved' })
       .expect(201);

@@ -305,6 +305,67 @@ de probar en la LAN, donde hace falta un túnel (ver
 
 ---
 
+## 5. Mercado Pago — los cobros (opcional)
+
+Sin esto la app funciona: `PAYMENT_PROVIDER=fake` deja el circuito completo
+—pedido, cobro, webhook, stock, "venta confirmada"— andando contra un proveedor
+simulado que **no mueve dinero**. Pasar a Mercado Pago es un paso aparte y una
+decisión explícita.
+
+1. [mercadopago.com.uy/developers/panel](https://www.mercadopago.com.uy/developers/panel)
+   → crear aplicación. Permisos: **read**, **write** y **offline access** — el
+   último es el que habilita el refresh token, y sin él las cuentas de los
+   vendedores se caen cuando vence el acceso.
+2. En **Configuración avanzada**, la URL de redirección OAuth:
+
+   ```
+   https://<tu-api>.up.railway.app/payments/mercadopago/oauth/callback
+   ```
+
+3. En **Webhooks**, la URL de notificaciones y el secreto de firma:
+
+   ```
+   https://<tu-api>.up.railway.app/payments/webhook/mercadopago
+   ```
+
+4. En **Railway**, agregar:
+
+   ```
+   PAYMENT_PROVIDER=mercadopago
+   MERCADOPAGO_CLIENT_ID=...
+   MERCADOPAGO_CLIENT_SECRET=...
+   MERCADOPAGO_ACCESS_TOKEN=TEST-...      # sandbox primero, siempre
+   MERCADOPAGO_WEBHOOK_SECRET=...
+   API_PUBLIC_URL=https://<tu-api>.up.railway.app
+   ```
+
+Cuatro cosas que conviene no aprender por las malas:
+
+- **`MERCADOPAGO_CLIENT_SECRET` y `MERCADOPAGO_ACCESS_TOKEN` van solo en
+  Railway.** Nunca en Vercel, nunca con prefijo `NEXT_PUBLIC_`. El navegador no
+  necesita ninguno: el checkout se arma en la API.
+- **`API_PUBLIC_URL` tiene que ser alcanzable desde internet.** De ahí salen la
+  `notification_url` y el callback de OAuth. Con `localhost` el webhook nunca
+  llega y los pedidos se quedan en `pending_payment` para siempre.
+- **Sin `MERCADOPAGO_WEBHOOK_SECRET` los avisos no se verifican.** En
+  producción el arranque lo grita en el log. Un webhook sin firma es un botón
+  público para marcar pedidos como pagos.
+- **Empezar con credenciales TEST.** El arranque avisa si el token no empieza
+  con `TEST-` fuera de producción. Cobrarle de verdad a alguien que estaba
+  probando no se deshace con un redeploy.
+
+Si falta alguna de las tres primeras, la API **no arranca**. Es preferible a
+descubrirlo cuando alguien toca "Pagar".
+
+### Cada vendedor conecta su cuenta
+
+VivoShop **no** recibe el dinero de las ventas. El modelo es marketplace: cada
+tienda conecta su propia cuenta desde `/vender/cobros`, el dinero entra ahí y
+la comisión de VivoShop se retiene en el mismo movimiento. Configurar las
+variables de arriba habilita el flujo; no conecta ninguna tienda.
+
+---
+
 ## Resumen de variables
 
 | Variable | Vercel | Railway | Secreta |
@@ -322,6 +383,12 @@ de probar en la LAN, donde hace falta un túnel (ver
 | `STREAMING_PROVIDER` | | ✅ | no |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` | | ✅ | no |
 | `LIVEKIT_API_SECRET` | | ✅ | **sí** |
+| `PAYMENT_PROVIDER` | | ✅ | no |
+| `MERCADOPAGO_CLIENT_ID` | | ✅ | no |
+| `MERCADOPAGO_CLIENT_SECRET` | | ✅ | **sí** |
+| `MERCADOPAGO_ACCESS_TOKEN` | | ✅ | **sí** |
+| `MERCADOPAGO_WEBHOOK_SECRET` | | ✅ | **sí** |
+| `API_PUBLIC_URL` | | ✅ | no |
 
 ---
 
@@ -337,6 +404,7 @@ de probar en la LAN, donde hace falta un túnel (ver
 | TLS verificado con la CA de Supabase | **VERIFICADO** — sin la CA la conexión se rechaza, que es lo correcto |
 | Deploy real en Railway | **VERIFICADO** — `/health` en 200, CORS correcto, registro real contra Supabase |
 | Deploy real en Vercel | **VERIFICADO** — vivoshop-web.vercel.app, 13 rutas barridas |
+| Cobros con Mercado Pago en producción | **NO VERIFICADO** — el despliegue sigue con `PAYMENT_PROVIDER=fake`. No se ejecutó ningún cobro real ni de prueba contra Mercado Pago. Ver `docs/m03.md` §17. |
 
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
 pero solo tres de esas filas se ejecutaron. Las otras se confirman en el primer

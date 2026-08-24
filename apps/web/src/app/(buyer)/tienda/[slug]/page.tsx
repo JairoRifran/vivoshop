@@ -7,6 +7,7 @@ import { ConnectionError } from '@/components/connection-error';
 import { LiveRowCard, ProductCard } from '@/components/cards';
 import { FollowButton } from '@/components/follow-button';
 import { ChevronLeftIcon, StoreIcon, TruckIcon } from '@/components/icons';
+import { VerifiedBadge } from '@/components/verified-badge';
 import { api, safe } from '@/lib/api';
 import { money, STORE_CATEGORY_LABEL } from '@/lib/format';
 
@@ -80,8 +81,9 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
           />
           <div className="flex flex-1 items-center justify-between gap-3 pb-1">
             <div className="min-w-0">
-              <h1 className="truncate text-[22px] font-extrabold leading-tight tracking-tight">
-                {store.name}
+              <h1 className="flex items-center gap-1.5 text-[22px] font-extrabold leading-tight tracking-tight">
+                <span className="truncate">{store.name}</span>
+                {store.isVerified ? <VerifiedBadge /> : null}
               </h1>
               <p className="truncate text-[13px] text-subtle">
                 {STORE_CATEGORY_LABEL[store.category] ?? store.category}

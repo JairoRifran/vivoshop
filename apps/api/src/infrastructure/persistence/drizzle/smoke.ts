@@ -7,13 +7,25 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { CheckoutService } from '../../../application/services/checkout.service';
 import type { LiveService } from '../../../application/services/live.service';
+import { PaymentService } from '../../../application/services/payment.service';
 import { NoopRealtimePublisher } from '../../realtime/realtime.module';
 import type { StoreService } from '../../../application/services/store.service';
-import { MockPaymentProvider } from '../../providers/mock-payment.provider';
+import { FakePaymentProvider } from '../../providers/fake-payment.provider';
+import { loadEnv } from '../../../config/env';
 import { SystemClock, UuidGenerator } from '../../system';
 import { buildPoolConfig, type VivoDatabase } from './client';
 import { DrizzleOrderTransactionRunner } from './drizzle.order-transaction';
-import { DrizzleOrderRepository, DrizzleProductRepository } from './drizzle.repositories';
+import {
+  DrizzleOAuthStateRepository,
+  DrizzlePaymentRepository,
+  DrizzlePaymentTransactionRunner,
+  DrizzleSellerPaymentAccountRepository,
+} from './drizzle.payments';
+import {
+  DrizzleOrderRepository,
+  DrizzleProductRepository,
+  DrizzleUserRepository,
+} from './drizzle.repositories';
 import { toStore } from './mappers';
 import { schema } from './schema';
 import { seedDatabase } from './seed';
@@ -154,16 +166,29 @@ async function main(): Promise<void> {
     const products = new DrizzleProductRepository(db);
     const orders = new DrizzleOrderRepository(db);
     const runner = new DrizzleOrderTransactionRunner(db);
+    const provider = new FakePaymentProvider(new UuidGenerator());
+    const payments = new PaymentService(
+      provider,
+      new DrizzlePaymentRepository(db),
+      new DrizzleSellerPaymentAccountRepository(db),
+      new DrizzleOAuthStateRepository(db),
+      new DrizzlePaymentTransactionRunner(db),
+      new DrizzleUserRepository(db),
+      new NoopRealtimePublisher(),
+      new SystemClock(),
+      new UuidGenerator(),
+      loadEnv(),
+      liveServiceStub(),
+    );
     const checkout = new CheckoutService(
       products,
       orders,
       runner,
-      new MockPaymentProvider(new UuidGenerator()),
-      new NoopRealtimePublisher(),
+      provider,
       new SystemClock(),
       new UuidGenerator(),
       storeServiceFor(db),
-      liveServiceStub(),
+      payments,
     );
 
     const BUYER = asUserId('ana');

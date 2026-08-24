@@ -1,12 +1,18 @@
 import {
+  DISPUTE_REASONS,
+  DISPUTE_STATUSES,
   LIVE_STATUSES,
   MESSAGE_KINDS,
   ORDER_STATUSES,
   PAYMENT_STATUSES,
   PRODUCT_STATUSES,
+  PROTECTION_LEVELS,
+  PROTECTION_STATUSES,
+  SELLER_ACCOUNT_STATUSES,
   STORE_CATEGORIES,
   STORE_STATUSES,
   USER_ROLES,
+  VERIFICATION_STATUSES,
 } from '@vivo/domain';
 import { z } from 'zod';
 import {
@@ -55,6 +61,14 @@ export const storeSummarySchema = z.object({
   reviewCount: z.number().int(),
   followerCount: z.number().int(),
   status: z.enum(STORE_STATUSES),
+  /**
+   * Si la tienda tiene el ✓ comercial.
+   *
+   * Un booleano y no el estado completo: que una verificación esté `pending` o
+   * `rejected` es asunto de su dueño, y publicarlo convertiría la ausencia del
+   * tick en una marca. Afuera solo existe "verificada" o nada.
+   */
+  isVerified: z.boolean(),
   /** Present only when the request is authenticated. */
   isFollowing: z.boolean().optional(),
   isLiveNow: z.boolean().optional(),
@@ -98,6 +112,13 @@ export const productSummarySchema = z.object({
   storeId: idSchema,
   storeName: z.string(),
   storeSlug: slugSchema,
+  /**
+   * Si la tienda que lo vende tiene el ✓.
+   *
+   * Denormalizado en la ficha para que una grilla de productos no tenga que
+   * pedir la tienda de cada uno solo para dibujar un adorno.
+   */
+  storeIsVerified: z.boolean(),
   title: z.string(),
   priceMinor: minorAmountSchema,
   compareAtPriceMinor: minorAmountSchema.nullable(),
@@ -264,6 +285,8 @@ export const orderSchema = z.object({
   tax: taxSnapshotSchema,
   totalMinor: minorAmountSchema,
   status: z.enum(ORDER_STATUSES),
+  /** Eje de Compra Protegida, independiente de `status`. */
+  protection: z.enum(PROTECTION_STATUSES),
   payment: z.object({
     methodId: z.string(),
     provider: z.string(),
@@ -272,6 +295,13 @@ export const orderSchema = z.object({
     installments: z.number().int(),
     reference: z.string().nullable(),
     paidAt: isoDateSchema.nullable(),
+    /**
+     * A dónde mandar al comprador para pagar, mientras el cobro siga abierto.
+     *
+     * Se emite y se olvida: no es un permiso ni un secreto, es una URL del
+     * proveedor que caduca sola. Ningún token del vendedor viaja acá.
+     */
+    checkoutUrl: z.string().nullable(),
   }),
   delivery: z.object({
     methodId: z.string(),
@@ -321,3 +351,81 @@ export const checkoutPreviewSchema = z.object({
     .nullable(),
 });
 export type CheckoutPreviewDto = z.infer<typeof checkoutPreviewSchema>;
+
+// --- Cobros y confianza (M03) --------------------------------------------------
+
+/**
+ * Lo que la plataforma puede prometerle al comprador **hoy**, derivado de lo
+ * que el proveedor de pagos soporta de verdad.
+ *
+ * Viaja al navegador para que la UI no tenga que adivinar ni hardcodear una
+ * promesa: si el proveedor no retiene el dinero, `level` no es `full` y la
+ * pantalla no dice que lo retiene.
+ */
+export const paymentCapabilitiesSchema = z.object({
+  provider: z.string(),
+  level: z.enum(PROTECTION_LEVELS),
+  supportsRefunds: z.boolean(),
+  supportsDisputes: z.boolean(),
+  /** Solo con esto en true se puede mostrar "retenido hasta la entrega". */
+  supportsDelayedSettlement: z.boolean(),
+});
+export type PaymentCapabilitiesDto = z.infer<typeof paymentCapabilitiesSchema>;
+
+/**
+ * La cuenta de cobro de una tienda, vista desde afuera.
+ *
+ * Sin tokens, sin id interno del proveedor: solo si está conectada y a nombre
+ * de qué. Es un tipo aparte y no un `Omit<>` para que agregar un campo secreto
+ * a la entidad no lo filtre acá por descuido.
+ */
+export const sellerPaymentAccountSchema = z.object({
+  provider: z.string(),
+  status: z.enum(SELLER_ACCOUNT_STATUSES),
+  accountLabel: z.string().nullable(),
+  connectedAt: isoDateSchema.nullable(),
+});
+export type SellerPaymentAccountDto = z.infer<typeof sellerPaymentAccountSchema>;
+
+/** El reparto de un cobro, para que el vendedor vea por qué cobró lo que cobró. */
+export const paymentSchema = z.object({
+  id: idSchema,
+  orderId: idSchema.nullable(),
+  status: z.enum(PAYMENT_STATUSES),
+  currency: currencySchema,
+  grossMinor: minorAmountSchema,
+  commissionMinor: minorAmountSchema,
+  commissionRateBps: z.number().int(),
+  commissionPolicy: z.string(),
+  netMinor: minorAmountSchema,
+  installments: z.number().int(),
+  checkoutUrl: z.string().nullable(),
+  createdAt: isoDateSchema,
+  approvedAt: isoDateSchema.nullable(),
+});
+export type PaymentDto = z.infer<typeof paymentSchema>;
+
+/**
+ * El estado de la verificación **para su dueño**.
+ *
+ * Es la única superficie donde `pending` y `rejected` son visibles, y solo
+ * para quien pidió la verificación. `rejectionReason` es interno; acá viaja
+ * porque su destinatario es exactamente quien tiene que corregir el dato.
+ */
+export const verificationStatusSchema = z.object({
+  status: z.enum(VERIFICATION_STATUSES),
+  submittedAt: isoDateSchema.nullable(),
+  reviewedAt: isoDateSchema.nullable(),
+  rejectionReason: z.string().nullable(),
+});
+export type VerificationStatusDto = z.infer<typeof verificationStatusSchema>;
+
+export const disputeSchema = z.object({
+  orderId: idSchema,
+  reason: z.enum(DISPUTE_REASONS),
+  status: z.enum(DISPUTE_STATUSES),
+  detail: z.string(),
+  openedAt: isoDateSchema,
+  resolvedAt: isoDateSchema.nullable(),
+});
+export type DisputeDto = z.infer<typeof disputeSchema>;

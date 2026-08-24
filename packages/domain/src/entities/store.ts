@@ -1,6 +1,7 @@
 import type { CountryCode, CurrencyCode } from '@vivo/config';
 import { DomainError } from '../errors';
 import type { StoreId, UserId } from '../value-objects/identifiers';
+import type { VerificationStatus } from './verification';
 
 export const STORE_STATUSES = ['active', 'paused', 'suspended'] as const;
 export type StoreStatus = (typeof STORE_STATUSES)[number];
@@ -28,6 +29,15 @@ export interface StoreSettings {
   /** Shown on the store page and in checkout as pickup instructions. */
   readonly pickupInstructions: string | null;
   readonly whatsapp: string | null;
+  /**
+   * Política de comisión aplicable a esta tienda, por nombre.
+   *
+   * Null usa la política por defecto. Vive acá —y no dentro del proveedor de
+   * pagos— porque cuánto cobra VivoShop es una decisión comercial: una
+   * promoción de lanzamiento o un acuerdo particular no tienen nada que ver
+   * con quién procesa la tarjeta. Ver `services/commission.ts`.
+   */
+  readonly commissionPolicy: string | null;
 }
 
 export interface StoreReputation {
@@ -51,6 +61,20 @@ export interface Store {
   readonly city: string | null;
   readonly reputation: StoreReputation;
   readonly followerCount: number;
+  /**
+   * Estado de la verificación **comercial**, copiado acá desde
+   * `BusinessVerification`.
+   *
+   * Denormalizado a propósito: el ✓ aparece en listados, resultados de
+   * búsqueda y descubrimiento, y resolverlo con un join por tienda en cada
+   * grilla sería pagar una consulta por un adorno. La fuente de verdad sigue
+   * siendo la verificación; esto es una copia que se actualiza cuando se
+   * otorga o se revoca.
+   *
+   * `unverified` es el estado normal y **no es una marca negativa**: una
+   * tienda sin tick vende, transmite y cobra igual.
+   */
+  readonly verification: VerificationStatus;
   readonly status: StoreStatus;
   readonly settings: StoreSettings;
   readonly createdAt: Date;
@@ -89,4 +113,5 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   acceptsReturns: true,
   pickupInstructions: null,
   whatsapp: null,
+  commissionPolicy: null,
 };

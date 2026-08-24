@@ -7,22 +7,54 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { CheckoutService } from '../../../application/services/checkout.service';
 import type { LiveService } from '../../../application/services/live.service';
+import { PaymentService } from '../../../application/services/payment.service';
 import { NoopRealtimePublisher } from '../../realtime/realtime.module';
 import type { OrderTransactionRunner } from '../../../application/ports/order-transaction';
-import type { OrderRepository, ProductRepository } from '../../../application/ports/repositories';
-import { MockPaymentProvider } from '../../providers/mock-payment.provider';
+import type {
+  OrderRepository,
+  ProductRepository,
+  UserRepository,
+} from '../../../application/ports/repositories';
+import type {
+  OAuthStateRepository,
+  PaymentRepository,
+  PaymentTransactionRunner,
+  SellerPaymentAccountRepository,
+} from '../../../application/ports/payments';
+import { FakePaymentProvider } from '../../providers/fake-payment.provider';
+import { loadEnv } from '../../../config/env';
 import { PasswordService } from '../../security/password.service';
 import { SystemClock, UuidGenerator } from '../../system';
 import type { StoreService } from '../../../application/services/store.service';
 import type { VivoDatabase } from '../drizzle/client';
 import { DrizzleOrderTransactionRunner } from '../drizzle/drizzle.order-transaction';
-import { DrizzleOrderRepository, DrizzleProductRepository } from '../drizzle/drizzle.repositories';
+import {
+  DrizzleOAuthStateRepository,
+  DrizzlePaymentRepository,
+  DrizzlePaymentTransactionRunner,
+  DrizzleSellerPaymentAccountRepository,
+} from '../drizzle/drizzle.payments';
+import {
+  DrizzleOrderRepository,
+  DrizzleProductRepository,
+  DrizzleUserRepository,
+} from '../drizzle/drizzle.repositories';
 import { toStore } from '../drizzle/mappers';
 import { schema } from '../drizzle/schema';
 import { seedDatabase } from '../drizzle/seed';
 import { MemoryDatabase } from '../memory/memory-database';
 import { MemoryOrderTransactionRunner } from '../memory/memory.order-transaction';
-import { MemoryOrderRepository, MemoryProductRepository } from '../memory/memory.repositories';
+import {
+  MemoryOAuthStateRepository,
+  MemoryPaymentRepository,
+  MemoryPaymentTransactionRunner,
+  MemorySellerPaymentAccountRepository,
+} from '../memory/memory.payments';
+import {
+  MemoryOrderRepository,
+  MemoryProductRepository,
+  MemoryUserRepository,
+} from '../memory/memory.repositories';
 
 /**
  * One test harness, two persistence drivers.
@@ -68,6 +100,10 @@ export class FaultInjectingRunner implements OrderTransactionRunner {
 export interface DriverHarness {
   readonly name: string;
   readonly checkout: CheckoutService;
+  /** El servicio de cobros del mismo driver, para probar el webhook con paridad. */
+  readonly payments: PaymentService;
+  /** El proveedor simulado detras de `payments`, para decidir desenlaces. */
+  readonly provider: FakePaymentProvider;
   /** Test-only failure injection; see `FaultInjectingRunner`. */
   readonly faults: FaultInjectingRunner;
   readonly products: ProductRepository;
@@ -101,23 +137,52 @@ function storeServiceStub(load: (id: StoreId) => Promise<unknown>): StoreService
   } as unknown as StoreService;
 }
 
-function buildCheckout(
-  products: ProductRepository,
-  orders: OrderRepository,
-  runner: OrderTransactionRunner,
-  stores: StoreService,
-): CheckoutService {
-  return new CheckoutService(
-    products,
-    orders,
-    runner,
-    new MockPaymentProvider(new UuidGenerator()),
+/**
+ * Arma el par checkout/cobros del driver.
+ *
+ * Con el proveedor simulado, que implementa el puerto completo: los tests del
+ * webhook pasan por la misma normalizacion, la misma clave de idempotencia y
+ * la misma transaccion que Mercado Pago. Es lo que hace que "anda con el
+ * proveedor simulado" signifique algo.
+ */
+function buildServices(input: {
+  products: ProductRepository;
+  orders: OrderRepository;
+  users: UserRepository;
+  runner: OrderTransactionRunner;
+  stores: StoreService;
+  paymentRepo: PaymentRepository;
+  accounts: SellerPaymentAccountRepository;
+  oauthStates: OAuthStateRepository;
+  paymentRunner: PaymentTransactionRunner;
+}): { checkout: CheckoutService; payments: PaymentService; provider: FakePaymentProvider } {
+  const provider = new FakePaymentProvider(new UuidGenerator());
+  const payments = new PaymentService(
+    provider,
+    input.paymentRepo,
+    input.accounts,
+    input.oauthStates,
+    input.paymentRunner,
+    input.users,
     new NoopRealtimePublisher(),
     new SystemClock(),
     new UuidGenerator(),
-    stores,
+    loadEnv({ ...process.env, NODE_ENV: 'test', DATA_DRIVER: 'memory', DATABASE_URL: undefined }),
     liveServiceStub(),
   );
+
+  const checkout = new CheckoutService(
+    input.products,
+    input.orders,
+    input.runner,
+    provider,
+    new SystemClock(),
+    new UuidGenerator(),
+    input.stores,
+    payments,
+  );
+
+  return { checkout, payments, provider };
 }
 
 // --- Memory ------------------------------------------------------------------
@@ -130,10 +195,23 @@ export async function createMemoryHarness(): Promise<DriverHarness> {
   const orders = new MemoryOrderRepository(db);
   const faults = new FaultInjectingRunner(new MemoryOrderTransactionRunner(db));
   const stores = storeServiceStub(async (id) => db.stores.get(String(id)));
+  const services = buildServices({
+    products,
+    orders,
+    users: new MemoryUserRepository(db),
+    runner: faults,
+    stores,
+    paymentRepo: new MemoryPaymentRepository(db),
+    accounts: new MemorySellerPaymentAccountRepository(db),
+    oauthStates: new MemoryOAuthStateRepository(db),
+    paymentRunner: new MemoryPaymentTransactionRunner(db),
+  });
 
   return {
     name: 'memory',
-    checkout: buildCheckout(products, orders, faults, stores),
+    checkout: services.checkout,
+    payments: services.payments,
+    provider: services.provider,
     faults,
     products,
     orders,
@@ -199,9 +277,23 @@ export async function createPgliteHarness(): Promise<DriverHarness> {
     return row ? toStore(row) : null;
   });
 
+  const services = buildServices({
+    products,
+    orders,
+    users: new DrizzleUserRepository(db),
+    runner: faults,
+    stores,
+    paymentRepo: new DrizzlePaymentRepository(db),
+    accounts: new DrizzleSellerPaymentAccountRepository(db),
+    oauthStates: new DrizzleOAuthStateRepository(db),
+    paymentRunner: new DrizzlePaymentTransactionRunner(db),
+  });
+
   return {
     name: 'postgres (pglite)',
-    checkout: buildCheckout(products, orders, faults, stores),
+    checkout: services.checkout,
+    payments: services.payments,
+    provider: services.provider,
     faults,
     products,
     orders,

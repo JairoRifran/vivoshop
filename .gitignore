@@ -43,3 +43,4 @@ docker/pgdata/
 # Secretos temporales del despliegue
 .jwt-secret.tmp
 .railway-vars.tmp
+.mp-test.tmp

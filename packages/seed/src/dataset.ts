@@ -44,12 +44,21 @@ interface StoreBlueprint {
   readonly followers: number;
   readonly freeShippingThresholdMinor?: number;
   readonly pickupInstructions?: string;
+  /**
+   * Si el comercio pasó la verificación comercial.
+   *
+   * El dataset mezcla tiendas con y sin tick a propósito. Es la única forma de
+   * ver en la demo lo que la UI tiene que sostener: que una tienda sin ✓ se ve
+   * completa y normal, sin nada que sugiera que hay algo mal con ella.
+   */
+  readonly verified?: boolean;
 }
 
 const STORE_BLUEPRINTS: readonly StoreBlueprint[] = [
   {
     key: 'plaza-moda',
     name: 'Plaza Moda',
+    verified: true,
     ownerKey: 'martina',
     category: 'moda',
     description:
@@ -105,6 +114,7 @@ const STORE_BLUEPRINTS: readonly StoreBlueprint[] = [
   },
   {
     key: 'cable-sur',
+    verified: true,
     name: 'Cable Sur',
     ownerKey: 'rodrigo',
     category: 'tecnologia',
@@ -279,6 +289,7 @@ function buildStores(now: Date): Store[] {
       salesCount: blueprint.sales,
     },
     followerCount: blueprint.followers,
+    verification: blueprint.verified ? ('verified' as const) : ('unverified' as const),
     status: 'active' as const,
     settings: {
       ...DEFAULT_STORE_SETTINGS,
@@ -504,6 +515,9 @@ function buildOrders(now: Date, products: readonly Product[]): Order[] {
       taxMinor: totals.taxMinor,
       tax: totals.tax,
       status: plan.status,
+      // El proveedor simulado del dataset no retiene fondos, así que ningún
+      // pedido de demo puede decir que está protegido. Ver `protection.ts`.
+      protection: 'not_applicable' as const,
       payment: {
         methodId: 'uy-mercadopago',
         provider: 'mercadopago',

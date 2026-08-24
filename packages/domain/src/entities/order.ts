@@ -1,6 +1,7 @@
 import type { CountryCode, CurrencyCode, DeliveryKind } from '@vivo/config';
 import { DomainError } from '../errors';
 import type { PaymentStatus } from './payment';
+import type { ProtectionStatus } from './protection';
 import type { TaxSnapshot } from '../services/tax';
 import type {
   AddressId,
@@ -211,6 +212,15 @@ export interface Order {
   /** Snapshot of the tax treatment applied to this order. */
   readonly tax: TaxSnapshot;
   readonly status: OrderStatus;
+  /**
+   * Si la compra está protegida, y en qué etapa de esa protección va.
+   *
+   * Eje aparte de `status` y del estado del pago porque responde otra
+   * pregunta. Un pedido `completed` puede estar `disputed`, y un pedido
+   * `paid` puede ser `not_applicable` porque el proveedor no retiene. Ver
+   * `entities/protection.ts`.
+   */
+  readonly protection: ProtectionStatus;
   readonly payment: OrderPayment;
   readonly delivery: OrderDelivery;
   readonly buyerNote: string | null;
@@ -238,3 +248,26 @@ export function assertDeliveryAddress(delivery: Pick<OrderDelivery, 'kind' | 'ad
     });
   }
 }
+
+/**
+ * Cuándo pasó el pedido por un estado, leído de su propia línea de tiempo.
+ *
+ * Derivado y no guardado en columnas propias a propósito: `timeline` ya es la
+ * fuente de verdad de cuándo ocurrió cada cosa, y duplicarla en `shippedAt` /
+ * `deliveredAt` crearía dos versiones de la misma fecha que tarde o temprano
+ * dejan de coincidir.
+ */
+export function orderReachedAt(
+  order: Pick<Order, 'timeline'>,
+  status: OrderStatus,
+): Date | null {
+  const event = order.timeline.find((entry) => entry.status === status);
+  return event ? event.at : null;
+}
+
+export const orderPaidAt = (order: Pick<Order, 'timeline'>): Date | null =>
+  orderReachedAt(order, 'paid');
+export const orderShippedAt = (order: Pick<Order, 'timeline'>): Date | null =>
+  orderReachedAt(order, 'shipped');
+export const orderDeliveredAt = (order: Pick<Order, 'timeline'>): Date | null =>
+  orderReachedAt(order, 'delivered');

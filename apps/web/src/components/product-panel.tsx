@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { track } from '@/lib/analytics';
 import { money } from '@/lib/format';
 import { TruckIcon } from './icons';
+import { VerifiedMark } from './verified-badge';
 
 /**
  * Product selection: images, options, stock and the buy CTA.
@@ -127,7 +128,10 @@ export function ProductPanel({
         <h1 className={cn('font-extrabold tracking-tight', compact ? 'text-xl' : 'text-2xl')}>
           {product.title}
         </h1>
-        <p className="text-[13px] text-subtle">{product.storeName}</p>
+        <p className="flex items-center gap-1 text-[13px] text-subtle">
+          <span className="truncate">{product.storeName}</span>
+          {product.storeIsVerified ? <VerifiedMark className="size-3.5" /> : null}
+        </p>
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

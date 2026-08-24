@@ -5,6 +5,7 @@ import {
   type LiveSessionId,
   type LiveStatePayload,
   type OrderCreatedPayload,
+  type PaymentApprovedPayload,
   type ProductFeaturedPayload,
   type ReactionBurstPayload,
   type SaleAnnouncedPayload,
@@ -61,6 +62,22 @@ export class GatewayRealtimePublisher implements RealtimePublisher {
     }
   }
 
+  /**
+   * Sala del vendedor. Lleva montos, así que no sale de ahí.
+   *
+   * Una compra fuera de un vivo no tiene sala a la que emitir: el vendedor la
+   * ve en sus pedidos. Cuando exista una sala por tienda, este método es el
+   * único lugar que cambia.
+   */
+  async paymentApproved(_storeId: StoreId, payload: PaymentApprovedPayload): Promise<void> {
+    if (!payload.liveSessionId) return;
+    try {
+      this.gateway.emitToSeller(payload.liveSessionId, REALTIME_EVENTS.paymentApproved, payload);
+    } catch (error) {
+      this.logger.warn(`payment.approved not delivered: ${String(error)}`);
+    }
+  }
+
   async saleAnnounced(payload: SaleAnnouncedPayload): Promise<void> {
     this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.saleAnnounced, payload);
   }
@@ -97,6 +114,7 @@ export class NoopRealtimePublisher implements RealtimePublisher {
   async reactionBurst(): Promise<void> {}
   async viewerCountChanged(): Promise<void> {}
   async orderCreated(): Promise<void> {}
+  async paymentApproved(): Promise<void> {}
   async saleAnnounced(): Promise<void> {}
   async roomSize(): Promise<number> {
     return 0;

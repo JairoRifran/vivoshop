@@ -66,12 +66,12 @@ tiene que acordarse de mantener sincronizadas.
 
 ## 3. Puertos y adaptadores
 
-Todo lo que algún día será un proveedor externo es hoy una interfaz con una implementación
-simulada.
+Todo lo que algún día será un proveedor externo es una interfaz. Dos ya tienen un adaptador de
+producción al lado del simulado.
 
 | Puerto | Hoy | Después |
 | --- | --- | --- |
-| `PaymentProvider` | `MockPaymentProvider` | Mercado Pago, Stripe |
+| `PaymentProviderPort` | `MercadoPagoProvider` (real) o `FakePaymentProvider` | dLocal, Stripe |
 | `StreamingProvider` | `LiveKitStreamingProvider` (real) o `MockStreamingProvider` | Agora, Daily, Mux |
 | `ShippingProvider` | `FlatRateShippingProvider` | DAC, Correo Uruguayo, UES |
 | `NotificationProvider` | `LogNotificationProvider` | FCM + APNs, email, WhatsApp |
@@ -79,16 +79,21 @@ simulada.
 | `CacheStore` / `PresenceStore` | `Memory*` | `Redis*` (ya escritos) |
 | Repositorios | `Memory*` | `Drizzle*` (ya escritos) |
 
-`StreamingProvider` es el único puerto que ya tiene un adaptador de producción. Se elige por
-configuración (`STREAMING_PROVIDER=mock|livekit`), no por build: el clon nuevo y toda la suite de
-pruebas corren en `mock`, sin cuenta ni Docker. `LiveKitStreamingProvider` es el **único** archivo
-del repositorio que sabe qué es un `VideoGrant`; todo lo que está por encima habla de
-`LiveCapabilities`. Cambiar de proveedor es un archivo nuevo al lado, no una refactorización.
+Los dos se eligen por configuración (`STREAMING_PROVIDER=mock|livekit`,
+`PAYMENT_PROVIDER=fake|mercadopago`), no por build: el clon nuevo y toda la suite de pruebas corren
+en los simulados, sin cuenta, sin Docker y sin credenciales.
+
+Cada adaptador real es el **único** archivo del repositorio que conoce el vocabulario de su
+proveedor. `LiveKitStreamingProvider` es el único que sabe qué es un `VideoGrant`;
+`MercadoPagoProvider` es el único que sabe qué es una preferencia o un `marketplace_fee`. Lo que
+está por encima habla de `LiveCapabilities` y de `PaymentStatus`. Cambiar de proveedor es un
+archivo nuevo al lado, no una refactorización.
 
 Los adaptadores simulados **implementan la interfaz completa**, no devuelven `true`.
-`MockPaymentProvider` crea una referencia, guarda estado y puede rechazar un pago. Por eso el
-checkout, la máquina de estados del pedido y la UI recorren exactamente los mismos caminos que
-recorrerán contra Mercado Pago. El día de la integración cambia un binding.
+`FakePaymentProvider` crea cobros, aprueba, rechaza, retiene, libera y devuelve, y su aviso recorre
+el mismo webhook —misma normalización, misma clave de idempotencia, misma transacción— que el de
+Mercado Pago. Por eso el checkout, la máquina de estados y la UI recorren exactamente los mismos
+caminos con los dos.
 
 Todos los bindings viven en **un solo archivo**,
 [`apps/api/src/infrastructure/infrastructure.module.ts`](../apps/api/src/infrastructure/infrastructure.module.ts).

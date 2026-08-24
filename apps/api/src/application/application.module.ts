@@ -6,6 +6,9 @@ import { CatalogService } from './services/catalog.service';
 import { CheckoutService } from './services/checkout.service';
 import { LiveService } from './services/live.service';
 import { OrderService } from './services/order.service';
+import { PaymentService } from './services/payment.service';
+import { ProtectionService } from './services/protection.service';
+import { VerificationService } from './services/verification.service';
 import { SellerService } from './services/seller.service';
 import { StoreService } from './services/store.service';
 
@@ -18,6 +21,9 @@ const SERVICES = [
   OrderService,
   SellerService,
   AnalyticsService,
+  PaymentService,
+  VerificationService,
+  ProtectionService,
 ];
 
 /**

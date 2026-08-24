@@ -12,6 +12,11 @@ import { AuthController } from './modules/auth.controller';
 import { ProductsController, StoresController } from './modules/catalog.controller';
 import { LiveController } from './modules/live.controller';
 import { CheckoutController, OrdersController } from './modules/orders.controller';
+import {
+  PaymentsController,
+  SellerPaymentsController,
+  VerificationController,
+} from './modules/payments.controller';
 import { SellerController } from './modules/seller.controller';
 import { SystemController } from './modules/system.controller';
 
@@ -48,6 +53,9 @@ import { SystemController } from './modules/system.controller';
     CheckoutController,
     OrdersController,
     SellerController,
+    PaymentsController,
+    SellerPaymentsController,
+    VerificationController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ApiExceptionFilter },

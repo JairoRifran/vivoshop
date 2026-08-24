@@ -4,11 +4,13 @@ Plataforma de **live commerce**. Las tiendas transmiten desde el celular y quien
 salir del video. Arranca en Uruguay y está construida para expandirse a Latinoamérica sin
 reescribir el núcleo.
 
-> **Estado: M02 — vivo real.**
+> **Estado: M03 — cobros y confianza.**
 > El producto se recorre completo de punta a punta. El stock es atómico, la creación de pedidos es
-> transaccional e idempotente, y todo eso está verificado contra PostgreSQL real. El video, los
-> pagos y las notificaciones siguen simulados detrás de interfaces con la forma final de su
-> integración.
+> transaccional e idempotente, y todo eso está verificado contra PostgreSQL real. El video tiene
+> adaptador real (LiveKit) y los cobros también (Mercado Pago, modelo marketplace), los dos
+> elegibles por configuración. **Ningún cobro real se ejecutó todavía**: el despliegue corre con el
+> proveedor simulado, que implementa el puerto completo. Las notificaciones y el envío siguen
+> simulados detrás de interfaces con la forma final de su integración.
 
 ---
 
@@ -285,6 +287,25 @@ Cómo probarlo, incluido el procedimiento con dos teléfonos:
 [`docs/live-testing.md`](docs/live-testing.md). Detalle técnico:
 [`docs/m02.md`](docs/m02.md).
 
+### Cobros y confianza
+
+- **Marketplace, no billetera.** El dinero de una venta va a la cuenta del vendedor y VivoShop
+  retiene su comisión en el mismo movimiento. No hay wallet, no hay escrow propio, no hay una
+  cuenta donde se junte plata ajena.
+- **El webhook es la autoridad.** Volver del proveedor no marca nada como pagado: el estado se
+  consulta contra su API y se aplica en una transacción que mueve pago, pedido y stock a la vez.
+  El aviso repetido —que es lo normal— no descuenta stock dos veces.
+- **La comisión vive en el dominio.** 3% por defecto, con políticas alternativas, y **congelada en
+  cada pago**: lo cobrado ayer sigue explicándose aunque la política cambie hoy.
+- **El ✓ es opcional y su ausencia no es una marca.** Un vendedor particular crea su tienda, carga
+  productos, transmite, vende y cobra sin presentar un RUT. El tick verifica un **comercio**, y
+  para eso sí pide datos del negocio.
+- **Compra Protegida promete solo lo que el proveedor sostiene.** Con Checkout Pro no se muestra
+  "retenemos tu dinero hasta la entrega", porque Mercado Pago liquida por su cuenta; se muestra lo
+  que sí es cierto.
+
+Detalle técnico y lo que **no** se verificó: [`docs/m03.md`](docs/m03.md).
+
 ## Despliegue
 
 Tres piezas en tres lugares, porque el gateway de WebSocket necesita un proceso
@@ -296,6 +317,7 @@ vivo y Vercel no lo da:
 | API (NestJS + Socket.IO) | Railway |
 | PostgreSQL | Supabase |
 | Video | LiveKit Cloud (opcional — sin él corre en `mock`) |
+| Cobros | Mercado Pago (opcional — sin él corre en `fake`) |
 
 Paso a paso, variables y estado de verificación en
 [`docs/deploy.md`](docs/deploy.md).

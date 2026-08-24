@@ -2,16 +2,24 @@ import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Query
 import { asOrderId, asStoreId, type OrderStatus } from '@vivo/domain';
 import {
   checkoutPreviewRequestSchema,
-  confirmPaymentRequestSchema,
   createOrderRequestSchema,
+  openDisputeRequestSchema,
+  simulatePaymentRequestSchema,
   type CheckoutPreviewDto,
   type CheckoutPreviewRequest,
-  type ConfirmPaymentRequest,
   type CreateOrderRequest,
+  type DisputeDto,
+  type OpenDisputeRequest,
   type OrderDto,
+  type PaymentDto,
+  type SimulatePaymentRequest,
 } from '@vivo/shared';
+import { toDisputeDto, toOrderDto, toPaymentDto } from '../application/mappers/dto.mappers';
 import { CheckoutService } from '../application/services/checkout.service';
 import { OrderService } from '../application/services/order.service';
+import { PaymentService } from '../application/services/payment.service';
+import { ProtectionService } from '../application/services/protection.service';
+import { StoreService } from '../application/services/store.service';
 import { Public, requireUser, type AuthenticatedUser } from '../common/auth.guard';
 import { CurrentUser, zodPipe } from '../common/http';
 
@@ -67,6 +75,9 @@ export class OrdersController {
   constructor(
     private readonly orders: OrderService,
     private readonly checkout: CheckoutService,
+    private readonly payments: PaymentService,
+    private readonly protection: ProtectionService,
+    private readonly stores: StoreService,
   ) {}
 
   @Get()
@@ -86,16 +97,60 @@ export class OrdersController {
   }
 
   /**
-   * Settles the simulated payment. Replaced in M02 by a provider webhook plus
-   * a client-side return URL; the order state machine below it does not move.
+   * Abre (o recupera) el cobro y devuelve a donde ir a pagar.
+   *
+   * No confirma nada. El metodo anterior se llamaba `confirmPayment` y esa
+   * palabra era exactamente el error: el navegador no puede decidir si se
+   * cobro. Quien decide es el webhook del proveedor.
    */
   @Post(':id/payment')
-  pay(
+  async pay(
     @CurrentUser() user: AuthenticatedUser | null,
     @Param('id') id: string,
-    @Body(zodPipe(confirmPaymentRequestSchema)) body: ConfirmPaymentRequest,
+  ): Promise<PaymentDto> {
+    const payment = await this.checkout.startPayment(requireUser(user).id, asOrderId(id));
+    return toPaymentDto(payment);
+  }
+
+  /**
+   * Resuelve un cobro simulado.
+   *
+   * Solo existe con el proveedor de desarrollo, y el propio servicio lo
+   * rechaza con cualquier otro. Con Mercado Pago esto seria un boton publico
+   * para marcar pedidos como pagos.
+   */
+  @Post(':id/payment/simulate')
+  async simulate(
+    @CurrentUser() user: AuthenticatedUser | null,
+    @Param('id') id: string,
+    @Body(zodPipe(simulatePaymentRequestSchema)) body: SimulatePaymentRequest,
   ): Promise<OrderDto> {
-    return this.checkout.confirmPayment(requireUser(user).id, asOrderId(id), body.outcome);
+    const buyerId = requireUser(user).id;
+    // Reutiliza el cobro abierto si ya existe: apretar dos veces no crea dos.
+    const payment = await this.checkout.startPayment(buyerId, asOrderId(id));
+    await this.payments.simulate(payment.providerIntentId ?? '', body.outcome);
+    return this.orders.detailForBuyer(buyerId, asOrderId(id));
+  }
+
+  /** "Recibi mi compra". Cierra la operacion; no libera el dinero. */
+  @Post(':id/receipt')
+  async confirmReceipt(
+    @CurrentUser() user: AuthenticatedUser | null,
+    @Param('id') id: string,
+  ): Promise<OrderDto> {
+    const order = await this.protection.confirmReceipt(requireUser(user).id, asOrderId(id));
+    return toOrderDto(order, await this.stores.requireById(order.storeId));
+  }
+
+  @Post(':id/dispute')
+  async openDispute(
+    @CurrentUser() user: AuthenticatedUser | null,
+    @Param('id') id: string,
+    @Body(zodPipe(openDisputeRequestSchema)) body: OpenDisputeRequest,
+  ): Promise<DisputeDto> {
+    return toDisputeDto(
+      await this.protection.openDispute(requireUser(user).id, asOrderId(id), body),
+    );
   }
 
   @Post(':id/cancel')

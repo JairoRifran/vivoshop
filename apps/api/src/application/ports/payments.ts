@@ -1,6 +1,8 @@
 import type { CurrencyCode } from '@vivo/config';
 import type {
+  BusinessVerification,
   Dispute,
+  IdentityVerification,
   OAuthState,
   Order,
   OrderId,
@@ -10,6 +12,7 @@ import type {
   PaymentPurpose,
   PaymentStatus,
   SellerPaymentAccount,
+  SettlementStatus,
   StoreId,
   UserId,
 } from '@vivo/domain';
@@ -50,6 +53,8 @@ export interface CheckoutRequest {
     readonly failure: string;
     readonly pending: string;
   };
+  /** A dónde avisa el proveedor. Esto sí decide. */
+  readonly notificationUrl: string;
   /** Referencia propia que el proveedor devuelve en el webhook. */
   readonly externalReference: string;
 }
@@ -72,6 +77,8 @@ export interface ProviderPayment {
   /** Motivo crudo del rechazo, para soporte. Nunca se muestra tal cual. */
   readonly failureReason: string | null;
   readonly approvedAt: Date | null;
+  /** Si el proveedor todavía retiene el dinero. Null cuando no lo informa. */
+  readonly settlement: SettlementStatus | null;
 }
 
 /**
@@ -83,6 +90,15 @@ export interface ProviderPayment {
 export interface WebhookNotification {
   readonly eventId: string;
   readonly providerPaymentId: string;
+  /**
+   * Cuenta del proveedor a la que pertenece el cobro, cuando el aviso la trae.
+   *
+   * En un marketplace hace falta: el pago vive en la cuenta del vendedor y
+   * consultarlo exige *su* credencial, no la de la plataforma. Cuando viene
+   * null se resuelve por el pago ya guardado, que es lo que ocurre en todo
+   * aviso que no es el primero.
+   */
+  readonly providerAccountId: string | null;
 }
 
 export interface RefundRequest {
@@ -111,6 +127,16 @@ export interface OAuthTokens {
  */
 export interface PaymentProviderPort {
   readonly key: string;
+
+  /**
+   * Si cobrar exige que el vendedor haya conectado su cuenta.
+   *
+   * Es una propiedad del proveedor, no una política: un marketplace real
+   * necesita saber a qué cuenta va la plata, y el proveedor de desarrollo no
+   * tiene cuentas. Está acá para que `PaymentService` no tenga que preguntar
+   * "¿sos el falso?", que es la forma de que la excepción se multiplique.
+   */
+  readonly requiresSellerAccount: boolean;
 
   /** Lo que sabe hacer. La UI promete exactamente esto y nada más. */
   capabilities(): PaymentCapabilities;
@@ -151,23 +177,16 @@ export interface PaymentRepository {
   findById(id: PaymentId): Promise<Payment | null>;
   findByOrderId(orderId: OrderId): Promise<Payment | null>;
   findByProviderPaymentId(provider: string, providerPaymentId: string): Promise<Payment | null>;
+  /** Los cobros de una tienda, del mas nuevo al mas viejo. */
+  listByStore(storeId: StoreId, limit?: number): Promise<Payment[]>;
   /** Los que siguen en `pending` y ya vencieron. Los barre una tarea. */
   listExpired(now: Date): Promise<Payment[]>;
 }
 
-/**
- * El registro de avisos ya procesados.
- *
- * `claim` devuelve `false` cuando el aviso ya se había visto. Es un insert con
- * clave única, no un "leer y después escribir": dos webhooks simultáneos del
- * mismo pago tienen que poder competir sin que ganen los dos.
- */
-export interface WebhookEventRepository {
-  claim(input: { provider: string; eventId: string; paymentId: PaymentId | null }): Promise<boolean>;
-}
-
 export interface SellerPaymentAccountRepository {
   find(storeId: StoreId, provider: string): Promise<SellerPaymentAccount | null>;
+  /** Resuelve la cuenta desde el id que trae el aviso del proveedor. */
+  findByExternalId(provider: string, externalAccountId: string): Promise<SellerPaymentAccount | null>;
   save(account: SellerPaymentAccount): Promise<SellerPaymentAccount>;
   remove(storeId: StoreId, provider: string): Promise<void>;
 }
@@ -184,19 +203,52 @@ export interface DisputeRepository {
   findByOrderId(orderId: OrderId): Promise<Dispute | null>;
 }
 
+export interface VerificationRepository {
+  findBusinessByStore(storeId: StoreId): Promise<BusinessVerification | null>;
+  saveBusiness(verification: BusinessVerification): Promise<BusinessVerification>;
+  findIdentityByUser(userId: UserId): Promise<IdentityVerification | null>;
+  saveIdentity(verification: IdentityVerification): Promise<IdentityVerification>;
+}
+
 /**
- * Lo que el webhook necesita hacer en una sola transacción.
+ * Lo que aplicar un aviso de pago necesita hacer en una sola transacción.
  *
- * Aprobar un pago mueve tres cosas —el pago, el pedido y el stock— y las tres
- * tienen que quedar consistentes o ninguna. Es el mismo patrón que M01.1 usó
- * para la creación del pedido, por el mismo motivo.
+ * Aprobar o rechazar un pago mueve cuatro cosas —el registro del aviso, el
+ * pago, el pedido y el stock— y las cuatro tienen que quedar consistentes o
+ * ninguna. Es el mismo patrón que M01.1 usó para la creación del pedido, por
+ * el mismo motivo.
+ *
+ * `claimWebhookEvent` está **adentro** y no antes a propósito. Registrar el
+ * aviso en su propia transacción y después fallar dejaría el evento consumido
+ * y el pago sin aplicar: el reintento del proveedor se descartaría por
+ * duplicado y el pedido quedaría colgado para siempre. Compartiendo la
+ * transacción, un fallo devuelve el aviso al estado de no visto.
  */
 export interface PaymentTransaction {
+  /**
+   * Registra el aviso. `false` significa que ya se había procesado.
+   *
+   * Es un insert con clave única, no un "leer y después escribir": dos
+   * webhooks simultáneos del mismo pago tienen que poder competir sin que
+   * ganen los dos.
+   */
+  claimWebhookEvent(input: {
+    provider: string;
+    eventId: string;
+    paymentId: PaymentId | null;
+  }): Promise<boolean>;
+
   loadPayment(id: PaymentId): Promise<Payment | null>;
   savePayment(payment: Payment): Promise<Payment>;
   loadOrder(id: OrderId): Promise<Order | null>;
   saveOrder(order: Order): Promise<Order>;
-  /** Devuelve las unidades reservadas. Idempotente por diseño del llamador. */
+  /**
+   * Devuelve las unidades reservadas a la góndola.
+   *
+   * La idempotencia no la pone este método: la pone la máquina de estados del
+   * pago, que solo permite salir de `pending` una vez. Llamarlo dos veces
+   * inventaría stock.
+   */
   releaseStock(order: Order): Promise<void>;
 }
 
@@ -208,10 +260,10 @@ export interface PaymentTransactionRunner {
 
 export const PAYMENT_PROVIDER_PORT = Symbol('PaymentProviderPort');
 export const PAYMENT_REPOSITORY = Symbol('PaymentRepository');
-export const WEBHOOK_EVENT_REPOSITORY = Symbol('WebhookEventRepository');
 export const SELLER_PAYMENT_ACCOUNT_REPOSITORY = Symbol('SellerPaymentAccountRepository');
 export const OAUTH_STATE_REPOSITORY = Symbol('OAuthStateRepository');
 export const DISPUTE_REPOSITORY = Symbol('DisputeRepository');
+export const VERIFICATION_REPOSITORY = Symbol('VerificationRepository');
 export const PAYMENT_TRANSACTION_RUNNER = Symbol('PaymentTransactionRunner');
 
 /** Reexportado para que los servicios no tengan que importar de dos lados. */

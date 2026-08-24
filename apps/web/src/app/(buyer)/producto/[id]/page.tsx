@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { ConnectionError } from '@/components/connection-error';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
 import { ProductPanel } from '@/components/product-panel';
+import { VerifiedBadge } from '@/components/verified-badge';
 import { api } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -68,7 +69,10 @@ export default async function ProductPage({
       >
         <Avatar name={product.storeName} size={40} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-bold">{product.storeName}</p>
+          <p className="flex items-center gap-1 text-[15px] font-bold">
+            <span className="truncate">{product.storeName}</span>
+            {product.storeIsVerified ? <VerifiedBadge size="sm" /> : null}
+          </p>
           <p className="text-[13px] text-subtle">Ver toda la tienda</p>
         </div>
         <ChevronRightIcon className="size-5 shrink-0 text-subtle" />

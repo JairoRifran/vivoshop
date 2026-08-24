@@ -360,14 +360,14 @@ describe('the private seller room', () => {
     const seller = await connect(await socketTokenFor(SELLER));
     await join(seller, id);
 
-    const privateEvent = once<{ revenueMinor: number }>(seller, 'order.created', 6000);
-    const leaked = never(viewer, 'order.created', 1200);
-
-    // A real purchase attributed to this live, through the real checkout.
+    // Una compra real atribuida a este vivo, por el checkout de verdad.
     const buyerAuth = { Authorization: `Bearer ${await tokenFor(BUYER)}` };
     const product = await http().get('/products/campera-roma').expect(200);
 
-    await http()
+    // Nada todavia: crear el pedido no es cobrar.
+    const tooEarly = never(seller, 'payment.approved', 1200);
+
+    const order = await http()
       .post('/checkout/plaza-moda/orders')
       .set(buyerAuth)
       .set('Idempotency-Key', `realtime-${Date.now()}`)
@@ -382,10 +382,34 @@ describe('the private seller room', () => {
       })
       .expect(201);
 
+    // Apretar "comprar" no canta una venta. Es la correccion central de M03:
+    // antes el vendedor veia "venta confirmada" por alguien que abrio el
+    // checkout y cerro la pestana.
+    expect(await tooEarly).toBe(false);
+
+    const confirmed = once<{ netMinor: number; grossMinor: number }>(
+      seller,
+      'payment.approved',
+      6000,
+    );
+    const privateEvent = once<{ revenueMinor: number }>(seller, 'order.created', 6000);
+    const leaked = never(viewer, 'order.created', 1200);
+
+    await http()
+      .post(`/orders/${order.body.id}/payment/simulate`)
+      .set(buyerAuth)
+      .send({ outcome: 'approved' })
+      .expect(201);
+
+    const sale = await confirmed;
+    expect(sale.grossMinor).toBeGreaterThan(0);
+    // Neto = bruto menos la comision de VivoShop, congelada en el pago.
+    expect(sale.netMinor).toBeLessThan(sale.grossMinor);
+
     const received = await privateEvent;
     expect(received.revenueMinor).toBeGreaterThan(0);
 
-    // And the public room learned nothing about who bought or for how much.
+    // Y la sala publica no se entero de quien compro ni por cuanto.
     expect(await leaked).toBe(false);
   });
 

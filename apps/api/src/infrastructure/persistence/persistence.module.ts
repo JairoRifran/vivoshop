@@ -20,9 +20,33 @@ import {
   STORE_REPOSITORY,
   USER_REPOSITORY,
 } from '../../application/ports/tokens';
+import {
+  DISPUTE_REPOSITORY,
+  OAUTH_STATE_REPOSITORY,
+  PAYMENT_REPOSITORY,
+  PAYMENT_TRANSACTION_RUNNER,
+  SELLER_PAYMENT_ACCOUNT_REPOSITORY,
+  VERIFICATION_REPOSITORY,
+} from '../../application/ports/payments';
 import { PasswordService } from '../security/password.service';
 import { DRIZZLE, createDatabase } from './drizzle/client';
 import { DrizzleOrderTransactionRunner } from './drizzle/drizzle.order-transaction';
+import {
+  DrizzleDisputeRepository,
+  DrizzleOAuthStateRepository,
+  DrizzlePaymentRepository,
+  DrizzlePaymentTransactionRunner,
+  DrizzleSellerPaymentAccountRepository,
+  DrizzleVerificationRepository,
+} from './drizzle/drizzle.payments';
+import {
+  MemoryDisputeRepository,
+  MemoryOAuthStateRepository,
+  MemoryPaymentRepository,
+  MemoryPaymentTransactionRunner,
+  MemorySellerPaymentAccountRepository,
+  MemoryVerificationRepository,
+} from './memory/memory.payments';
 import {
   DrizzleAnalyticsRepository,
   DrizzleFollowRepository,
@@ -56,6 +80,12 @@ const REPOSITORY_TOKENS = [
   FOLLOW_REPOSITORY,
   ANALYTICS_REPOSITORY,
   ORDER_TRANSACTION_RUNNER,
+  PAYMENT_REPOSITORY,
+  SELLER_PAYMENT_ACCOUNT_REPOSITORY,
+  OAUTH_STATE_REPOSITORY,
+  DISPUTE_REPOSITORY,
+  VERIFICATION_REPOSITORY,
+  PAYMENT_TRANSACTION_RUNNER,
 ];
 
 const POOL = Symbol('PgPool');
@@ -79,6 +109,15 @@ const POOL = Symbol('PgPool');
     { provide: FOLLOW_REPOSITORY, useClass: MemoryFollowRepository },
     { provide: ANALYTICS_REPOSITORY, useClass: MemoryAnalyticsRepository },
     { provide: ORDER_TRANSACTION_RUNNER, useClass: MemoryOrderTransactionRunner },
+    { provide: PAYMENT_REPOSITORY, useClass: MemoryPaymentRepository },
+    {
+      provide: SELLER_PAYMENT_ACCOUNT_REPOSITORY,
+      useClass: MemorySellerPaymentAccountRepository,
+    },
+    { provide: OAUTH_STATE_REPOSITORY, useClass: MemoryOAuthStateRepository },
+    { provide: DISPUTE_REPOSITORY, useClass: MemoryDisputeRepository },
+    { provide: VERIFICATION_REPOSITORY, useClass: MemoryVerificationRepository },
+    { provide: PAYMENT_TRANSACTION_RUNNER, useClass: MemoryPaymentTransactionRunner },
   ],
   exports: [...REPOSITORY_TOKENS, MemoryDatabase],
 })
@@ -130,6 +169,15 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: FOLLOW_REPOSITORY, useClass: DrizzleFollowRepository },
     { provide: ANALYTICS_REPOSITORY, useClass: DrizzleAnalyticsRepository },
     { provide: ORDER_TRANSACTION_RUNNER, useClass: DrizzleOrderTransactionRunner },
+    { provide: PAYMENT_REPOSITORY, useClass: DrizzlePaymentRepository },
+    {
+      provide: SELLER_PAYMENT_ACCOUNT_REPOSITORY,
+      useClass: DrizzleSellerPaymentAccountRepository,
+    },
+    { provide: OAUTH_STATE_REPOSITORY, useClass: DrizzleOAuthStateRepository },
+    { provide: DISPUTE_REPOSITORY, useClass: DrizzleDisputeRepository },
+    { provide: VERIFICATION_REPOSITORY, useClass: DrizzleVerificationRepository },
+    { provide: PAYMENT_TRANSACTION_RUNNER, useClass: DrizzlePaymentTransactionRunner },
   ],
   exports: [...REPOSITORY_TOKENS, DRIZZLE],
 })
