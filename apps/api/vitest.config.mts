@@ -11,6 +11,10 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Corre antes de importar cada archivo de prueba, que es el único momento
+    // en el que fijar el driver sirve: `infrastructure.module.ts` lo elige en
+    // tiempo de importación. Ver el comentario en vitest.setup.ts.
+    setupFiles: ['./vitest.setup.ts'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     pool: 'forks',

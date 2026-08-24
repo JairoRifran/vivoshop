@@ -145,6 +145,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.startsWith('dev-only')) {
     throw new Error('Refusing to start in production with the development JWT_SECRET');
   }
+  // Una suite de pruebas no tiene nada que hacer contra una base remota. Esto
+  // no es teórico: con un `.env` apuntando a Supabase, `pnpm test` escribió
+  // datos de prueba en la base desplegada y pasó en verde. Falla ruidosamente
+  // en vez de escribir donde no debe.
+  if (env.NODE_ENV === 'test' && env.DATA_DRIVER === 'postgres' && !isLocalDatabase(env.DATABASE_URL)) {
+    throw new Error(
+      'Refusing to run tests against a remote database. ' +
+        `DATABASE_URL points at ${hostOf(env.DATABASE_URL)}; tests use DATA_DRIVER=memory.`,
+    );
+  }
 
   return {
     ...env,
@@ -160,3 +170,18 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
 }
 
 export const ENV = Symbol('APP_ENV');
+
+function hostOf(connectionString: string | undefined): string {
+  if (!connectionString) return '(sin URL)';
+  try {
+    return new URL(connectionString).hostname;
+  } catch {
+    return '(URL ilegible)';
+  }
+}
+
+function isLocalDatabase(connectionString: string | undefined): boolean {
+  if (!connectionString) return true;
+  const host = hostOf(connectionString);
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === 'postgres';
+}

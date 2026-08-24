@@ -103,6 +103,19 @@ pnpm db:smoke
 ahí y verifica de verdad el stock atómico, la idempotencia y el rollback contra
 ese servidor. Si pasa, la base está lista.
 
+> **Cuidado: un `.env` con la base desplegada afecta a `pnpm test`.**
+>
+> `infrastructure.module.ts` elige el driver en tiempo de importación, antes de
+> que cualquier `beforeAll` pueda cambiarlo. Con un `.env` apuntando a Supabase,
+> una corrida local de las pruebas escribió veintinueve transmisiones de prueba
+> en la base desplegada — y pasó en verde, así que no se notó hasta mirar los
+> datos.
+>
+> Ya está cerrado por dos lados: `apps/api/vitest.setup.ts` fija el driver en
+> memoria antes de importar nada, y `loadEnv` se niega a correr pruebas contra
+> una base que no sea local. Vale conocerlo igual, porque el mismo patrón
+> —decidir algo en tiempo de importación— puede repetirse en otro lado.
+
 > **Los datos de demo traen usuarios con contraseña `vivo1234`.** En una URL
 > pública eso es una cuenta de vendedor abierta para cualquiera que lea el
 > README. Está bien para mostrar el producto; no lo está para nada más. Cuando
