@@ -115,7 +115,7 @@ export class OrderService {
       delivery,
       payment:
         status === 'cancelled' && order.payment.status === 'pending'
-          ? { ...order.payment, status: 'failed' }
+          ? { ...order.payment, status: 'rejected' }
           : order.payment,
       timeline: [...order.timeline, { status, at: now, note }],
       updatedAt: now,

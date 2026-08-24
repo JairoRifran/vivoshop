@@ -265,6 +265,8 @@ export const orderItems = pgTable(
     variantLabelSnapshot: text('variant_label_snapshot').notNull().default(''),
     imageUrlSnapshot: text('image_url_snapshot'),
     unitPriceMinor: integer('unit_price_minor').notNull(),
+    /** De dónde salió el precio: catálogo hoy, oferta aceptada en M04. */
+    priceSource: text('price_source').notNull().default('catalog'),
     quantity: integer('quantity').notNull(),
     subtotalMinor: integer('subtotal_minor').notNull(),
     /** Per-line tax snapshot, so a mixed-rate order stays auditable. */
@@ -334,6 +336,191 @@ export const analyticsEvents = pgTable(
   (table) => [index('analytics_name_time_idx').on(table.name, table.occurredAt)],
 );
 
+// --- Pagos y confianza (M03) -------------------------------------------------
+
+/**
+ * Un cobro, con el reparto congelado.
+ *
+ * Tabla propia y no columnas en `orders` porque un pago no siempre pertenece a
+ * un pedido: promocionar un vivo va a cobrarse por el mismo circuito, y
+ * entonces `order_id` queda nulo.
+ */
+export const payments = pgTable(
+  'payments',
+  {
+    id: text('id').primaryKey(),
+    purpose: text('purpose').notNull().default('order'),
+    orderId: text('order_id').references(() => orders.id, { onDelete: 'cascade' }),
+    storeId: text('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    payerId: text('payer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    status: text('status').notNull().default('pending'),
+    currency: text('currency').notNull(),
+    // El reparto se guarda tal como se aplicó. Si mañana cambia la comisión,
+    // lo cobrado ayer sigue explicándose sin consultar la política vigente.
+    grossMinor: integer('gross_minor').notNull(),
+    commissionMinor: integer('commission_minor').notNull(),
+    commissionRateBps: integer('commission_rate_bps').notNull(),
+    commissionPolicy: text('commission_policy').notNull(),
+    netMinor: integer('net_minor').notNull(),
+    installments: integer('installments').notNull().default(1),
+    provider: text('provider').notNull(),
+    providerIntentId: text('provider_intent_id'),
+    providerPaymentId: text('provider_payment_id'),
+    checkoutUrl: text('checkout_url'),
+    failureReason: text('failure_reason'),
+    /** Liquidación: si el proveedor retiene y si ya se liberó. */
+    settlementStatus: text('settlement_status').notNull().default('not_supported'),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('payments_order_idx').on(table.orderId),
+    index('payments_store_idx').on(table.storeId),
+    // El webhook llega con el id del proveedor y nada más: sin este índice,
+    // cada aviso sería un scan de la tabla entera.
+    index('payments_provider_payment_idx').on(table.provider, table.providerPaymentId),
+  ],
+);
+
+/**
+ * Avisos del proveedor ya procesados.
+ *
+ * Es lo que vuelve idempotente al webhook. Mercado Pago reintenta, y sin esta
+ * tabla un reintento descontaría stock dos veces, cobraría dos comisiones y
+ * anunciaría dos ventas. La clave primaria hace el trabajo: insertar gana o
+ * falla, y solo quien gana procesa.
+ */
+export const paymentWebhookEvents = pgTable(
+  'payment_webhook_events',
+  {
+    provider: text('provider').notNull(),
+    /** Identificador del aviso en el proveedor. */
+    eventId: text('event_id').notNull(),
+    paymentId: text('payment_id').references(() => payments.id, { onDelete: 'cascade' }),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.provider, table.eventId] })],
+);
+
+/** La cuenta con la que cobra cada tienda. Los tokens no salen del servidor. */
+export const sellerPaymentAccounts = pgTable(
+  'seller_payment_accounts',
+  {
+    storeId: text('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    status: text('status').notNull().default('disconnected'),
+    externalAccountId: text('external_account_id'),
+    externalAccountLabel: text('external_account_label'),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    connectedAt: timestamp('connected_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.storeId, table.provider] })],
+);
+
+/**
+ * El `state` anti-CSRF del OAuth.
+ *
+ * Sin esto cualquiera puede inducir a un vendedor a conectar la cuenta de otro
+ * a su tienda. Se emite antes de mandar a la persona al proveedor y se consume
+ * una sola vez al volver.
+ */
+export const oauthStates = pgTable('oauth_states', {
+  state: text('state').primaryKey(),
+  storeId: text('store_id')
+    .notNull()
+    .references(() => stores.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+});
+
+/**
+ * Verificación comercial: la que otorga el ✓.
+ *
+ * Los datos viven acá y no en `stores` para que sea difícil filtrarlos por
+ * accidente en un DTO: hay que salir a buscarlos a propósito.
+ */
+export const businessVerifications = pgTable(
+  'business_verifications',
+  {
+    id: text('id').primaryKey(),
+    storeId: text('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('unverified'),
+    legalName: text('legal_name'),
+    taxId: text('tax_id'),
+    responsibleName: text('responsible_name'),
+    responsibleDocument: text('responsible_document'),
+    commercialAddress: text('commercial_address'),
+    contactPhone: text('contact_phone'),
+    contactEmail: text('contact_email'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewer: text('reviewer'),
+    reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Interno: le sirve a soporte, no se expone en ninguna respuesta pública. */
+    rejectionReason: text('rejection_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('business_verification_store_idx').on(table.storeId)],
+);
+
+/** Verificación de identidad de una persona. No otorga tick. */
+export const identityVerifications = pgTable(
+  'identity_verifications',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('unverified'),
+    fullName: text('full_name'),
+    documentNumber: text('document_number'),
+    documentType: text('document_type'),
+    phone: text('phone'),
+    email: text('email'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewer: text('reviewer'),
+    reviewedBy: text('reviewed_by_user_id'),
+    rejectionReason: text('rejection_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('identity_verification_user_idx').on(table.userId)],
+);
+
+/** Reclamo del comprador. Declarado, no mediado: M03 deja el estado. */
+export const disputes = pgTable('disputes', {
+  orderId: text('order_id')
+    .primaryKey()
+    .references(() => orders.id, { onDelete: 'cascade' }),
+  openedBy: text('opened_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('open'),
+  detail: text('detail').notNull().default(''),
+  openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+});
+
 export const schema = {
   users,
   stores,
@@ -347,6 +534,13 @@ export const schema = {
   follows,
   idempotencyKeys,
   analyticsEvents,
+  payments,
+  paymentWebhookEvents,
+  sellerPaymentAccounts,
+  oauthStates,
+  businessVerifications,
+  identityVerifications,
+  disputes,
 };
 
 export type Schema = typeof schema;

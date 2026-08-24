@@ -31,15 +31,20 @@ describe('order status machine', () => {
     expect(() => assertOrderTransition('shipped', 'cancelled')).toThrow(DomainError);
   });
 
-  it('treats delivered and cancelled as terminal', () => {
-    expect(isOrderFinal('delivered')).toBe(true);
+  it('treats completed and cancelled as terminal', () => {
+    // `delivered` dejó de ser el final en M03: llegó, pero todavía puede
+    // reclamarse. `completed` es el momento en que la compra se da por buena
+    // y, si el proveedor lo soporta, se libera la plata.
+    expect(isOrderFinal('completed')).toBe(true);
     expect(isOrderFinal('cancelled')).toBe(true);
+    expect(isOrderFinal('delivered')).toBe(false);
     expect(isOrderFinal('paid')).toBe(false);
   });
 
   it('exposes the legal next steps for the seller UI', () => {
     expect(nextOrderStatuses('paid')).toEqual(['preparing', 'cancelled']);
-    expect(nextOrderStatuses('delivered')).toEqual([]);
+    expect(nextOrderStatuses('delivered')).toEqual(['completed']);
+    expect(nextOrderStatuses('completed')).toEqual([]);
   });
 
   it('covers every status in the machine', () => {

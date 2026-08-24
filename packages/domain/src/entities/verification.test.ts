@@ -1,24 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { DomainError } from '../errors';
+import type { DomainError } from '../errors';
 import {
   VERIFICATION_STATUSES,
-  assertReviewable,
+  assertBusinessReviewable,
+  assertIdentityReviewable,
   assertVerificationTransition,
   canTransitionVerification,
   isVerified,
   storeCapabilitiesFor,
   type BusinessDetails,
+  type IdentityDetails,
   type VerificationStatus,
 } from './verification';
 
-const detallesCompletos: BusinessDetails = {
-  legalName: 'Laura Indumentaria',
-  taxId: null,
-  responsibleName: 'Laura Fernández',
+const negocio: BusinessDetails = {
+  legalName: 'Martina Indumentaria SRL',
+  taxId: '210123456789',
+  responsibleName: 'Martina Silva',
   responsibleDocument: '1.234.567-8',
-  contactAddress: null,
+  commercialAddress: 'Av. 18 de Julio 1234, Montevideo',
   contactPhone: '099123456',
-  contactEmail: 'laura@ejemplo.uy',
+  contactEmail: 'hola@martinastore.uy',
+};
+
+const persona: IdentityDetails = {
+  fullName: 'Laura Fernández',
+  documentNumber: '4.567.890-1',
+  documentType: 'CI',
+  phone: '099765432',
+  email: 'laura@ejemplo.uy',
 };
 
 describe('máquina de estados de la verificación', () => {
@@ -46,8 +56,8 @@ describe('máquina de estados de la verificación', () => {
   });
 
   it('deja reintentar después de un rechazo', () => {
-    // Un rechazo suele ser un dato mal cargado. Obligar a empezar de cero
-    // castigaría al vendedor por un error de tipeo.
+    // Un rechazo suele ser un dato mal cargado. Empezar de cero castigaría al
+    // vendedor por un error de tipeo.
     expect(canTransitionVerification('rejected', 'pending')).toBe(true);
   });
 
@@ -70,28 +80,56 @@ describe('máquina de estados de la verificación', () => {
   });
 });
 
-describe('datos comerciales', () => {
-  it('acepta un vendedor particular sin RUT', () => {
-    // El corazón del principio de vendedores: se puede verificar la identidad
-    // comercial de alguien que no está formalizado.
-    expect(() => assertReviewable({ ...detallesCompletos, taxId: null })).not.toThrow();
-  });
-
-  it('exige lo mínimo para poder revisar', () => {
+describe('el tick es de comercios, no de personas', () => {
+  it('la verificación comercial exige identificador tributario', () => {
+    // Es lo que separa un comercio formal de una persona que vende. Sin esto,
+    // el ✓ estaría afirmando algo que nadie comprobó.
     try {
-      assertReviewable({ ...detallesCompletos, responsibleDocument: '  ' });
+      assertBusinessReviewable({ ...negocio, taxId: '   ' });
       expect.unreachable('debería haber fallado');
     } catch (error) {
       expect((error as DomainError).code).toBe('VERIFICATION_DETAILS_INCOMPLETE');
-      expect((error as DomainError).details).toMatchObject({ missing: ['responsibleDocument'] });
+      expect((error as DomainError).details).toMatchObject({ missing: ['taxId'] });
+    }
+  });
+
+  it('exige además datos del negocio, no solo de quien lo atiende', () => {
+    // El caso que hay que impedir: otorgar el tick con la sola identidad
+    // personal del responsable.
+    try {
+      assertBusinessReviewable({ ...negocio, legalName: '', commercialAddress: '' });
+      expect.unreachable('debería haber fallado');
+    } catch (error) {
+      expect((error as DomainError).details).toMatchObject({
+        missing: ['legalName', 'commercialAddress'],
+      });
+    }
+  });
+
+  it('acepta un comercio con todos sus datos', () => {
+    expect(() => assertBusinessReviewable(negocio)).not.toThrow();
+  });
+
+  it('la verificación de identidad no pide nada del negocio', () => {
+    // Un vendedor particular puede verificar quién es sin tener RUT, razón
+    // social ni domicilio comercial.
+    expect(() => assertIdentityReviewable(persona)).not.toThrow();
+  });
+
+  it('la identidad sí exige documento', () => {
+    try {
+      assertIdentityReviewable({ ...persona, documentNumber: '' });
+      expect.unreachable('debería haber fallado');
+    } catch (error) {
+      expect((error as DomainError).details).toMatchObject({ missing: ['documentNumber'] });
     }
   });
 });
 
 describe('capacidades del tick', () => {
   it('una tienda sin verificar no pierde nada que hoy tenga', () => {
-    // La ausencia del tick no debe transmitir desconfianza ni recortar
-    // funcionalidad: vender, transmitir y cobrar no dependen de él.
+    // La ausencia del tick no transmite desconfianza ni recorta funcionalidad:
+    // vender, transmitir y cobrar no dependen de él.
     const sin = storeCapabilitiesFor('unverified');
     expect(Object.values(sin).every((value) => value === false)).toBe(true);
   });

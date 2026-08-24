@@ -461,6 +461,7 @@ function buildOrders(now: Date, products: readonly Product[]): Order[] {
     preparing: ['pending_payment', 'paid', 'preparing'],
     shipped: ['pending_payment', 'paid', 'preparing', 'shipped'],
     delivered: ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered'],
+    completed: ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered', 'completed'],
     cancelled: ['pending_payment', 'cancelled'],
   };
 
@@ -506,7 +507,7 @@ function buildOrders(now: Date, products: readonly Product[]): Order[] {
       payment: {
         methodId: 'uy-mercadopago',
         provider: 'mercadopago',
-        status: paid ? ('paid' as const) : ('pending' as const),
+        status: paid ? ('approved' as const) : ('pending' as const),
         installments: 1,
         reference: paid ? `demo-${plan.key}` : null,
         paidAt: paid ? new Date(createdAt.getTime() + minutes(6)) : null,

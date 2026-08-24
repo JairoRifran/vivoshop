@@ -33,6 +33,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   preparing: 'Preparando',
   shipped: 'Enviado',
   delivered: 'Entregado',
+  completed: 'Completado',
   cancelled: 'Cancelado',
 };
 
@@ -43,6 +44,7 @@ export const ORDER_STATUS_TONE: Record<OrderStatus, 'neutral' | 'info' | 'succes
     preparing: 'info',
     shipped: 'info',
     delivered: 'success',
+    completed: 'success',
     cancelled: 'danger',
   };
 

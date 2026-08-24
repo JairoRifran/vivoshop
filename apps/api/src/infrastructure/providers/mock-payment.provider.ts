@@ -52,7 +52,7 @@ export class MockPaymentProvider implements PaymentProvider {
   }): Promise<PaymentIntent> {
     const intent: PaymentIntent = {
       reference: input.reference,
-      status: input.outcome === 'approved' ? 'paid' : 'failed',
+      status: input.outcome === 'approved' ? 'approved' : 'rejected',
       checkoutUrl: null,
     };
     this.intents.set(input.reference, intent);

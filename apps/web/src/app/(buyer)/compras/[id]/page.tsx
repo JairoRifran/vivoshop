@@ -176,8 +176,8 @@ export default async function OrderDetailPage({
             {order.payment.installments > 1 ? ` · ${order.payment.installments} cuotas` : ''}
           </p>
         </div>
-        <Badge tone={order.payment.status === 'paid' ? 'success' : 'warning'}>
-          {order.payment.status === 'paid' ? 'Pagado' : 'Pendiente'}
+        <Badge tone={order.payment.status === 'approved' ? 'success' : 'warning'}>
+          {order.payment.status === 'approved' ? 'Pagado' : 'Pendiente'}
         </Badge>
       </section>
 

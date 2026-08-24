@@ -4,6 +4,7 @@ import type {
   LiveSessionId,
   Order,
   OrderId,
+  PaymentStatus,
   StoreId,
   UserId,
 } from '@vivo/domain';
@@ -55,7 +56,7 @@ export interface PresenceStore {
 
 export interface PaymentIntent {
   readonly reference: string;
-  readonly status: 'pending' | 'authorized' | 'paid' | 'failed';
+  readonly status: PaymentStatus;
   /** Where the buyer would be redirected. Null while payments are simulated. */
   readonly checkoutUrl: string | null;
 }

@@ -401,10 +401,10 @@ export class CheckoutService {
     });
     const now = this.clock.now();
 
-    if (intent.status !== 'paid') {
+    if (intent.status !== 'approved') {
       const failed = await this.orders.update({
         ...order,
-        payment: { ...order.payment, status: 'failed' },
+        payment: { ...order.payment, status: 'rejected' },
         updatedAt: now,
       });
       return toOrderDto(failed, store);
@@ -413,7 +413,7 @@ export class CheckoutService {
     const paid = await this.orders.update({
       ...order,
       status: 'paid',
-      payment: { ...order.payment, status: 'paid', reference: intent.reference, paidAt: now },
+      payment: { ...order.payment, status: 'approved', reference: intent.reference, paidAt: now },
       timeline: [...order.timeline, { status: 'paid', at: now, note: null }],
       updatedAt: now,
     });

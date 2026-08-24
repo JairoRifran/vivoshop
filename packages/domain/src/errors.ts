@@ -53,7 +53,9 @@ export type DomainErrorCode =
   /** The verification cannot move to that status from where it is. */
   | 'INVALID_VERIFICATION_TRANSITION'
   /** The submitted commercial details are incomplete. */
-  | 'VERIFICATION_DETAILS_INCOMPLETE';
+  | 'VERIFICATION_DETAILS_INCOMPLETE'
+  /** The protection cannot move to that status from where it is. */
+  | 'INVALID_PROTECTION_TRANSITION';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

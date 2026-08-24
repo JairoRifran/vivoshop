@@ -12,12 +12,21 @@ import type {
   VariantId,
 } from '../value-objects/identifiers';
 
+/**
+ * El ciclo del pedido, que hace también de estado de cumplimiento.
+ *
+ * `completed` es nuevo en M03 y no es decorativo: es el momento en que la
+ * compra se da por buena y, si el proveedor lo soporta, se libera la plata.
+ * Sin ese paso no hay dónde apoyar la Compra Protegida — `delivered` dice que
+ * llegó, `completed` dice que nadie reclamó.
+ */
 export const ORDER_STATUSES = [
   'pending_payment',
   'paid',
   'preparing',
   'shipped',
   'delivered',
+  'completed',
   'cancelled',
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -27,7 +36,8 @@ const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   paid: ['preparing', 'cancelled'],
   preparing: ['shipped', 'cancelled'],
   shipped: ['delivered'],
-  delivered: [],
+  delivered: ['completed'],
+  completed: [],
   cancelled: [],
 };
 
@@ -59,6 +69,7 @@ export const ORDER_TIMELINE: readonly OrderStatus[] = [
   'preparing',
   'shipped',
   'delivered',
+  'completed',
 ];
 
 export function timelineIndex(status: OrderStatus): number {
