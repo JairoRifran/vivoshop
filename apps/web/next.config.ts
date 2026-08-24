@@ -1,7 +1,22 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  // Sin esto, el despliegue compila pero revienta en cada pedido.
+  //
+  // Next traza los archivos que la función serverless necesita empezando por
+  // la carpeta de la app. `@vivo/domain`, `@vivo/shared` y `@vivo/config` son
+  // paquetes del workspace: viven en `packages/` y llegan acá por symlink. Con
+  // la raíz de trazado en `apps/web` ninguno entra en el bundle, y en Vercel
+  // eso es `Cannot find module '@vivo/shared'` en tiempo de ejecución.
+  //
+  // En local no se nota, porque el monorepo entero está en disco.
+  outputFileTracingRoot: join(here, '../..'),
 
   // A separate build directory lets the end-to-end suite run its own dev
   // server while `pnpm dev` is still running: Next allows one dev server per
