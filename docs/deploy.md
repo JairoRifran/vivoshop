@@ -305,6 +305,52 @@ de probar en la LAN, donde hace falta un túnel (ver
 
 ---
 
+## 4.5. Migraciones: por qué el deploy las corre solo
+
+`railway.json` declara:
+
+```json
+"preDeployCommand": "node dist/infrastructure/persistence/drizzle/migrate.js"
+```
+
+Railway lo ejecuta **una vez por deploy, antes de que la versión nueva reciba
+tráfico**. Si falla, aborta el rollout y la versión vieja sigue sirviendo.
+
+Esto no es una comodidad: es la corrección de una caída real. El deploy de M03
+subió código que consulta `stores.verification_status`, la migración nunca se
+había aplicado a Supabase, y la API devolvió **500 en `/stores`, `/products` y
+`/live`** —o sea, en todo el producto— mientras `/health` seguía en 200 y el
+panel de Railway mostraba el servicio como sano. El healthcheck no toca la base,
+así que no había forma de enterarse desde ahí.
+
+Tres detalles del comando, cada uno por un motivo:
+
+- **Va en `preDeployCommand` y no en el `CMD`.** El `CMD` corre una vez por
+  réplica; dos réplicas migrando a la vez es una carrera que nadie quiere
+  depurar de madrugada. `preDeployCommand` corre una sola vez.
+- **Invoca el JS compilado, no `pnpm db:migrate`.** La etapa de ejecución del
+  Dockerfile no habilita corepack, así que ahí no hay ni `pnpm` ni `tsx`. El
+  `dist` sí tiene `migrate.js` porque `tsconfig.build.json` solo excluye tests.
+- **Las migraciones siguen siendo archivos revisables.** Se generan con
+  `pnpm db:generate` y se commitean; nunca se usa `drizzle-kit push`, que
+  muta la base desde el esquema y solo sirve en una máquina local.
+
+El seed **no** es automático y no debe serlo: sobrescribir en silencio una base
+con datos reales en cada arranque sería hostil. Se corre a mano con
+`pnpm db:seed` cuando corresponde.
+
+### Si una migración quedó sin aplicar
+
+Se nota como un 500 en endpoints que leen la tabla afectada, con `/health` en
+200. Para aplicarlas desde tu máquina, con `DATABASE_URL` y `DATABASE_CA_CERT`
+apuntando a Supabase:
+
+```bash
+pnpm --filter @vivo/api db:migrate
+```
+
+---
+
 ## 5. Mercado Pago — los cobros (opcional)
 
 Sin esto la app funciona: `PAYMENT_PROVIDER=fake` deja el circuito completo
@@ -404,6 +450,7 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 | TLS verificado con la CA de Supabase | **VERIFICADO** — sin la CA la conexión se rechaza, que es lo correcto |
 | Deploy real en Railway | **VERIFICADO** — `/health` en 200, CORS correcto, registro real contra Supabase |
 | Deploy real en Vercel | **VERIFICADO** — vivoshop-web.vercel.app, 13 rutas barridas |
+| Migraciones aplicadas en el deploy | **VERIFICADO a mano** — las de M03 se aplicaron con `db:migrate` contra Supabase y `/stores`, `/products` y `/live` volvieron a 200. El `preDeployCommand` que lo automatiza está **NO VERIFICADO**: se prueba en el próximo deploy. |
 | Cobros con Mercado Pago en producción | **NO VERIFICADO** — el despliegue sigue con `PAYMENT_PROVIDER=fake`. No se ejecutó ningún cobro real ni de prueba contra Mercado Pago. Ver `docs/m03.md` §17. |
 
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,

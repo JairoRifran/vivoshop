@@ -334,7 +334,17 @@ export class MercadoPagoProvider implements PaymentProviderPort {
     };
     if (options.idempotencyKey) headers['X-Idempotency-Key'] = options.idempotencyKey;
 
-    let response: Response;
+    /**
+     * El tipo se deriva de `fetch`, no del nombre global `Response`.
+     *
+     * La API compila con `lib: ["ES2023"]` —sin DOM—, así que `Response` como
+     * nombre global sale de los `@types` que haya instalados, y eso cambia
+     * entre entornos: en uno resolvió a un tipo sin `.text()`, `.ok` ni
+     * `.status` y el build rompió ahí y en ningún otro lado. Anotar con el
+     * nombre global era una dependencia gratuita del entorno; derivarlo de la
+     * función que produce el valor no puede desincronizarse.
+     */
+    let response: Awaited<ReturnType<typeof fetch>>;
     try {
       response = await fetch(`${API}${path}`, {
         method: options.method,
