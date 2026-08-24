@@ -1,0 +1,189 @@
+@import 'tailwindcss';
+
+/* Primitives live in the workspace, so Tailwind has to scan them too. */
+@source '../../../../packages/ui/src';
+
+/*
+ * Design tokens.
+ *
+ * One accent, one ink, a warm neutral ramp. The restraint is the point: a live
+ * commerce screen is already full of motion, faces and product photography, so
+ * the interface around it stays quiet and lets the video carry the colour.
+ *
+ * The palette is committed to light. Immersive surfaces (the live viewer, the
+ * broadcast console) are deliberately dark and declare their own colours, so
+ * they read as a different place inside the same product.
+ */
+@theme {
+  --color-ink: #14141a;
+  --color-ink-soft: #3d3d47;
+  --color-subtle: #74747f;
+
+  --color-surface: #ffffff;
+  --color-canvas: #faf9f7;
+  --color-muted: #f3f2ef;
+  --color-muted-strong: #e8e6e1;
+  --color-line: #e2e0da;
+
+  /* The one saturated colour in the system. Reserved for "happening now". */
+  --color-live: #ff2d55;
+
+  --color-focus: #2f6bff;
+  --color-danger: #d92d20;
+  --color-success: #0f9d58;
+  --color-success-ink: #0a6b3c;
+  --color-warning: #f0a202;
+  --color-warning-ink: #8a5a00;
+  --color-info: #2f6bff;
+  --color-info-ink: #1b4fd6;
+
+  --font-sans:
+    var(--font-manrope), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-4xl: 1.75rem;
+
+  --shadow-card: 0 1px 2px rgb(20 20 26 / 0.04), 0 8px 24px -12px rgb(20 20 26 / 0.12);
+  --shadow-raised: 0 2px 6px rgb(20 20 26 / 0.06), 0 18px 40px -20px rgb(20 20 26 / 0.28);
+
+  --animate-heart-float: heart-float 1.6s ease-out forwards;
+  --animate-rise: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-sheet-up: sheet-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes heart-float {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-160px) scale(0.9) translateX(var(--drift, 0px));
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    /* Stops iOS from resizing text when the phone is rotated. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Prevents the horizontal jiggle that a stray wide element causes. */
+    overflow-x: hidden;
+  }
+
+  /* Only ever show a focus ring for keyboard users, never on a tap. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Hide the scrollbar on horizontal rails without disabling scrolling. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Bottom sheets slide up from the edge they are anchored to. */
+  .vivo-sheet[open] > div {
+    animation: var(--animate-sheet-up);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vivo-sheet[open] > div {
+      animation: none;
+    }
+  }
+
+  /*
+   * Safe areas. Phones with a home indicator or a notch need real padding, not
+   * a guessed constant, and the fallback keeps desktop sane.
+   */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+  .h-safe-nav {
+    height: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* Reserves room so fixed navigation never covers the last row of content. */
+  .pb-nav {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .surface-card {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-3xl);
+    box-shadow: var(--shadow-card);
+  }
+}

@@ -1,0 +1,64 @@
+import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ApplicationModule } from './application/application.module';
+import { JwtAuthGuard } from './common/auth.guard';
+import { ApiExceptionFilter } from './common/http';
+import { ENV, loadEnv, type AppEnv } from './config/env';
+import { CoreModule } from './core.module';
+import { InfrastructureModule } from './infrastructure/infrastructure.module';
+import { RealtimeModule } from './infrastructure/realtime/realtime.module';
+import { AuthController } from './modules/auth.controller';
+import { ProductsController, StoresController } from './modules/catalog.controller';
+import { LiveController } from './modules/live.controller';
+import { CheckoutController, OrdersController } from './modules/orders.controller';
+import { SellerController } from './modules/seller.controller';
+import { SystemController } from './modules/system.controller';
+
+/**
+ * A modular monolith: one deployable, clear internal seams.
+ *
+ *   modules/         HTTP surface — parsing, status codes, nothing else
+ *   application/     use cases and ports
+ *   @vivo/domain     rules and invariants, framework free
+ *   infrastructure/  the only place that knows about Postgres, Redis or a vendor
+ *
+ * Dependencies point inward. `application` may import `domain`; `domain`
+ * imports neither of the others, and ESLint enforces that.
+ */
+@Module({
+  imports: [
+    CoreModule,
+    InfrastructureModule,
+    RealtimeModule,
+    ApplicationModule,
+    ThrottlerModule.forRootAsync({
+      inject: [ENV],
+      useFactory: (env: AppEnv) => ({
+        throttlers: [{ name: 'default', ttl: 60_000, limit: env.RATE_LIMIT }],
+      }),
+    }),
+  ],
+  controllers: [
+    SystemController,
+    AuthController,
+    StoresController,
+    ProductsController,
+    LiveController,
+    CheckoutController,
+    OrdersController,
+    SellerController,
+  ],
+  providers: [
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
+    // Order matters: rate limiting runs before authentication so an
+    // unauthenticated flood is rejected without touching the datastore.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+  ],
+})
+export class AppModule {
+  static env(): AppEnv {
+    return loadEnv();
+  }
+}

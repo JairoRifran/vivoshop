@@ -1,0 +1,41 @@
+{
+  "name": "vivo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vivo — live commerce platform. Uruguay first, LATAM ready.",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "pnpm --filter @vivo/api build && pnpm --filter @vivo/web test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,css,yml,yaml}\"",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter @vivo/api db:generate",
+    "db:push": "pnpm --filter @vivo/api db:push",
+    "db:seed": "pnpm --filter @vivo/api db:seed",
+    "clean": "turbo run clean && rimraf node_modules",
+    "test:e2e:install": "pnpm --filter @vivo/web exec playwright install --with-deps chromium",
+    "db:smoke": "pnpm --filter @vivo/api db:smoke"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "24.13.3",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.5.0",
+    "prettier": "3.9.6",
+    "rimraf": "6.1.3",
+    "turbo": "2.10.11",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0"
+  }
+}

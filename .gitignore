@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+.next/
+.next-e2e/
+out/
+build/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+.playwright/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local data
+docker/pgdata/
+.next-lk/

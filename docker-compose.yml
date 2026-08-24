@@ -1,0 +1,45 @@
+# Local infrastructure only. The application itself runs on the host through
+# `pnpm dev` so hot reload stays fast.
+#
+#   pnpm db:up          start postgres + redis
+#   pnpm db:push        create the schema
+#   pnpm db:seed        load the demo dataset
+#
+# Not required when DATA_DRIVER=memory (the default).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: vivo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vivo
+      POSTGRES_PASSWORD: vivo
+      POSTGRES_DB: vivo
+    ports:
+      - '5432:5432'
+    volumes:
+      - vivo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vivo -d vivo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vivo-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - vivo-redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  vivo-pgdata:
+  vivo-redisdata:

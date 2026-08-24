@@ -1,0 +1,10 @@
+# El repositorio se escribe en LF. Git normaliza al entrar y no reescribe nada
+# al salir, así que un clon en Windows y uno en Linux producen el mismo diff.
+* text=auto eol=lf
+
+# Binarios: nunca tocar.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

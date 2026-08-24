@@ -1,0 +1,41 @@
+import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
+import { AppModule } from './app.module';
+import { ENV, type AppEnv } from './config/env';
+import { CorsIoAdapter } from './infrastructure/realtime/io-adapter';
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const env = app.get<AppEnv>(ENV);
+  const logger = new Logger('Bootstrap');
+
+  // API-only service: no cookies, no sessions, no CSRF surface. The CSP
+  // defaults helmet applies to HTML do not apply to JSON, so they are off.
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
+  app.enableCors({
+    origin: env.corsOrigins,
+    credentials: false,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  // Socket.IO does its own CORS handshake and does not inherit the setting
+  // above. Same allowlist, declared once more where the adapter can see it.
+  app.useWebSocketAdapter(new CorsIoAdapter(app, env.corsOrigins));
+
+  // Validation is per-route through `zodPipe`, using the same schemas the web
+  // app validates its forms with. No global class-validator pipe on purpose.
+  app.enableShutdownHooks();
+
+  await app.listen(env.API_PORT, '0.0.0.0');
+
+  logger.log(`Vivo API en http://localhost:${env.API_PORT}`);
+  logger.log(`Datos: ${env.DATA_DRIVER} · Cache: ${env.CACHE_DRIVER}`);
+  logger.log(`Streaming: ${env.STREAMING_PROVIDER} · Realtime: ws://localhost:${env.API_PORT}/realtime`);
+  logger.log(`Origenes permitidos: ${env.corsOrigins.join(', ')}`);
+}
+
+void bootstrap();

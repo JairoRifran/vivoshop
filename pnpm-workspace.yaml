@@ -1,0 +1,11 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Build scripts are opt-in. Only compiled toolchain packages we deliberately
+# trust are allowed to run install scripts; everything else stays inert.
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
