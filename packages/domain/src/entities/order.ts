@@ -15,10 +15,18 @@ import type {
 /**
  * El ciclo del pedido, que hace también de estado de cumplimiento.
  *
- * `completed` es nuevo en M03 y no es decorativo: es el momento en que la
- * compra se da por buena y, si el proveedor lo soporta, se libera la plata.
- * Sin ese paso no hay dónde apoyar la Compra Protegida — `delivered` dice que
- * llegó, `completed` dice que nadie reclamó.
+ * `completed` es nuevo en M03 y significa **una sola cosa**: la operación
+ * comercial terminó bien. Llegó, el comprador lo dio por recibido y nadie
+ * reclamó. `delivered` dice que llegó; `completed` dice que se cerró.
+ *
+ * No dice nada sobre la plata. Que el dinero esté liberado es
+ * `SettlementStatus`, un eje aparte, y la combinación
+ *
+ *     OrderStatus = completed  +  SettlementStatus = pending_release
+ *
+ * es perfectamente válida: el pedido se cerró y el proveedor todavía no
+ * liberó. Completar **puede disparar** un intento de liberación; no es la
+ * liberación.
  */
 export const ORDER_STATUSES = [
   'pending_payment',

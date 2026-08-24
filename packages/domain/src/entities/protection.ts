@@ -93,17 +93,53 @@ export const NO_PAYMENT_CAPABILITIES: PaymentCapabilities = {
 };
 
 /**
- * Si se le puede mostrar el escudo 🛡️ al comprador.
+ * Cuánto se puede prometer, que no es sí o no.
  *
- * Una sola función, para que la promesa no dependa de que cada pantalla se
- * acuerde de consultar la capacidad correcta. Sin liquidación diferida no hay
- * nada que prometer.
+ * Retener el dinero, poder devolverlo y poder resolver un reclamo son tres
+ * capacidades distintas, y la Compra Protegida las necesita a las tres:
+ * retener sin poder devolver deja la plata trabada sin salida, y devolver sin
+ * un circuito de reclamos deja al comprador sin forma de pedirlo. Prometer el
+ * escudo con una sola de las tres sería vender algo que no existe.
+ *
+ * Por eso la respuesta es un nivel y no un booleano: la UI dice exactamente lo
+ * que el proveedor puede garantizar, ni más ni menos.
  */
-export function canPromiseProtection(capabilities: PaymentCapabilities): boolean {
-  return capabilities.supportsDelayedSettlement;
+export const PROTECTION_LEVELS = ['none', 'refund_only', 'full'] as const;
+export type ProtectionLevel = (typeof PROTECTION_LEVELS)[number];
+
+export function protectionLevel(capabilities: PaymentCapabilities): ProtectionLevel {
+  if (
+    capabilities.supportsDelayedSettlement &&
+    capabilities.supportsRefunds &&
+    capabilities.supportsDisputes
+  ) {
+    return 'full';
+  }
+  // Sin retención no hay nada retenido, pero si se puede devolver el dinero
+  // hay algo honesto que decir: "si algo sale mal, te lo devolvemos".
+  if (capabilities.supportsRefunds) return 'refund_only';
+  return 'none';
 }
 
-/** Con qué estado nace la protección de una compra, según el proveedor. */
+/**
+ * Si se le puede mostrar el escudo 🛡️ y la promesa fuerte al comprador.
+ *
+ * Solo con el nivel completo. Un proveedor que únicamente reembolsa **no**
+ * habilita "tu dinero queda retenido hasta que recibas el producto": eso sería
+ * describir un mecanismo que no está ocurriendo.
+ */
+export function canPromiseProtection(capabilities: PaymentCapabilities): boolean {
+  return protectionLevel(capabilities) === 'full';
+}
+
+/**
+ * Con qué estado nace la protección de una compra.
+ *
+ * `eligible` solo si la protección es completa, porque `ProtectionStatus`
+ * describe un ciclo —protegida, reclamada, resuelta— que sin retención ni
+ * reclamos no tiene dónde ocurrir. Con `refund_only` el reembolso sigue
+ * disponible; simplemente no es este eje el que lo representa.
+ */
 export function initialProtection(capabilities: PaymentCapabilities): ProtectionStatus {
   return canPromiseProtection(capabilities) ? 'eligible' : 'not_applicable';
 }
@@ -150,7 +186,10 @@ export interface Dispute {
  *
  * ```
  * comprador paga -> aprobado -> el vendedor despacha -> enviado
- *   -> entregado -> el comprador confirma -> completado -> liberado
+ *   -> entregado -> el comprador confirma -> completado -> (se pide liberar)
+ *
+ * El último paso está entre paréntesis a propósito: completar pide la
+ * liberación, no la efectúa. Quien libera es el proveedor.
  * ```
  *
  * Con dos salidas para cuando nadie hace nada, porque en la vida real pasa:
@@ -208,6 +247,25 @@ export function canAutoComplete(
 ): boolean {
   if (!order.deliveredAt || order.protection === 'disputed') return false;
   return (now.getTime() - order.deliveredAt.getTime()) / 1000 >= deadlines.autoCompleteSeconds;
+}
+
+/**
+ * Si corresponde pedirle al proveedor que libere.
+ *
+ * Es la única relación entre los dos ejes, y es deliberadamente débil:
+ * completar el pedido **habilita** el intento, no lo consuma. La liberación la
+ * hace el proveedor y puede demorar, fallar o quedar congelada por un reclamo;
+ * hasta que confirme, `SettlementStatus` sigue en `pending_release` aunque el
+ * pedido esté `completed`.
+ */
+export function shouldAttemptRelease(input: {
+  readonly orderStatus: string;
+  readonly settlement: SettlementStatus;
+  readonly protection: ProtectionStatus;
+}): boolean {
+  if (input.settlement !== 'pending_release') return false;
+  if (input.protection === 'disputed') return false;
+  return input.orderStatus === 'completed';
 }
 
 // --- Stock -------------------------------------------------------------------

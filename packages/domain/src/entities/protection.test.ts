@@ -7,9 +7,11 @@ import {
   canTransitionProtection,
   initialProtection,
   initialSettlement,
+  protectionLevel,
+  shippingBreach,
+  shouldAttemptRelease,
   shouldReleaseStock,
   shouldRemindToShip,
-  shippingBreach,
   type PaymentCapabilities,
 } from './protection';
 
@@ -25,24 +27,85 @@ const sinRetencion: PaymentCapabilities = {
   supportsRefunds: true,
 };
 
-describe('la promesa de Compra Protegida depende del proveedor', () => {
-  it('no se promete nada sin liquidación diferida', () => {
-    // La regla que evita mentirle al comprador: si el proveedor liquida al
-    // instante, no hay nada retenido y no hay nada que prometer.
-    expect(canPromiseProtection(sinRetencion)).toBe(false);
-    expect(initialProtection(sinRetencion)).toBe('not_applicable');
-    expect(initialSettlement(sinRetencion)).toBe('not_supported');
+describe('la promesa depende exactamente de lo que el proveedor garantiza', () => {
+  it('no promete nada cuando el proveedor no puede nada', () => {
+    expect(protectionLevel(NO_PAYMENT_CAPABILITIES)).toBe('none');
+    expect(canPromiseProtection(NO_PAYMENT_CAPABILITIES)).toBe(false);
+    expect(initialProtection(NO_PAYMENT_CAPABILITIES)).toBe('not_applicable');
+    expect(initialSettlement(NO_PAYMENT_CAPABILITIES)).toBe('not_supported');
   });
 
-  it('se promete solo cuando el proveedor puede retener', () => {
+  it('reembolsar no alcanza para el escudo', () => {
+    // Poder devolver plata después no es retenerla antes. Se puede decir "si
+    // algo sale mal te lo devolvemos"; no se puede decir "queda retenido".
+    expect(protectionLevel(sinRetencion)).toBe('refund_only');
+    expect(canPromiseProtection(sinRetencion)).toBe(false);
+    expect(initialProtection(sinRetencion)).toBe('not_applicable');
+  });
+
+  it('retener sin poder devolver tampoco alcanza', () => {
+    // Dejaría la plata trabada sin salida: peor que no prometer nada.
+    const soloRetiene = { ...NO_PAYMENT_CAPABILITIES, supportsDelayedSettlement: true };
+    expect(protectionLevel(soloRetiene)).toBe('none');
+    expect(canPromiseProtection(soloRetiene)).toBe(false);
+  });
+
+  it('retener y devolver sin circuito de reclamos tampoco', () => {
+    // El comprador no tendría cómo pedirlo.
+    const sinReclamos = {
+      ...NO_PAYMENT_CAPABILITIES,
+      supportsDelayedSettlement: true,
+      supportsRefunds: true,
+    };
+    expect(protectionLevel(sinReclamos)).toBe('refund_only');
+    expect(canPromiseProtection(sinReclamos)).toBe(false);
+  });
+
+  it('el escudo exige las tres capacidades juntas', () => {
+    expect(protectionLevel(conRetencion)).toBe('full');
     expect(canPromiseProtection(conRetencion)).toBe(true);
     expect(initialProtection(conRetencion)).toBe('eligible');
     expect(initialSettlement(conRetencion)).toBe('pending_release');
   });
+});
 
-  it('reembolsar no alcanza para prometer protección', () => {
-    // Poder devolver plata después no es lo mismo que retenerla antes.
-    expect(canPromiseProtection({ ...NO_PAYMENT_CAPABILITIES, supportsRefunds: true })).toBe(false);
+describe('completar el pedido no es liberar la plata', () => {
+  it('completed con pending_release es una combinación válida', () => {
+    // El pedido se cerró y el proveedor todavía no liberó. Es lo normal, no
+    // una inconsistencia: son dos ejes distintos.
+    expect(
+      shouldAttemptRelease({
+        orderStatus: 'completed',
+        settlement: 'pending_release',
+        protection: 'protected',
+      }),
+    ).toBe(true);
+  });
+
+  it('no se pide liberar antes de completar', () => {
+    for (const orderStatus of ['paid', 'shipped', 'delivered']) {
+      expect(
+        shouldAttemptRelease({ orderStatus, settlement: 'pending_release', protection: 'protected' }),
+      ).toBe(false);
+    }
+  });
+
+  it('no se pide liberar lo que ya se liberó ni lo que el proveedor no retiene', () => {
+    for (const settlement of ['released', 'not_supported', 'held'] as const) {
+      expect(
+        shouldAttemptRelease({ orderStatus: 'completed', settlement, protection: 'protected' }),
+      ).toBe(false);
+    }
+  });
+
+  it('un reclamo abierto frena la liberación aunque el pedido esté completo', () => {
+    expect(
+      shouldAttemptRelease({
+        orderStatus: 'completed',
+        settlement: 'pending_release',
+        protection: 'disputed',
+      }),
+    ).toBe(false);
   });
 });
 
