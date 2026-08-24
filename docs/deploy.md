@@ -66,15 +66,32 @@ Supabase está presentando su propia CA. Dos salidas, en orden de preferencia:
 
 ### Migrar y sembrar
 
-Desde tu máquina, apuntando a Supabase:
+Desde tu máquina. Poner la cadena en un `.env` en la raíz del repositorio —
+está en `.gitignore`, y así la contraseña no queda en el historial de la
+terminal:
+
+```
+DATA_DRIVER=postgres
+DATABASE_URL=postgresql://postgres.<ref>:LA_PASSWORD@aws-0-<region>.pooler.supabase.com:5432/postgres
+```
+
+Después, en orden:
 
 ```bash
-DATABASE_URL='postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres' pnpm db:migrate
+pnpm db:migrate
 ```
 
 ```bash
-DATABASE_URL='postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres' pnpm db:seed
+pnpm db:seed
 ```
+
+```bash
+pnpm db:smoke
+```
+
+`db:smoke` es el que vale: crea un esquema descartable, corre las migraciones
+ahí y verifica de verdad el stock atómico, la idempotencia y el rollback contra
+ese servidor. Si pasa, la base está lista.
 
 > **Los datos de demo traen usuarios con contraseña `vivo1234`.** En una URL
 > pública eso es una cuenta de vendedor abierta para cualquiera que lea el
@@ -98,7 +115,7 @@ DATABASE_URL='postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres' pnpm
    NODE_ENV=production
    DATA_DRIVER=postgres
    CACHE_DRIVER=memory
-   DATABASE_URL=postgresql://postgres:...@db.<ref>.supabase.co:5432/postgres
+   DATABASE_URL=postgresql://postgres.<ref>:...@aws-0-<region>.pooler.supabase.com:5432/postgres
    DATABASE_SSL=auto
    JWT_SECRET=<32+ caracteres aleatorios, generados, no inventados>
    WEB_ORIGIN=https://<tu-app>.vercel.app
