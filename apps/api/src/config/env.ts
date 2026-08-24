@@ -130,6 +130,41 @@ export interface AppEnv extends RawEnv {
   readonly corsOrigins: string[];
   readonly isProduction: boolean;
   readonly isTest: boolean;
+  /**
+   * Qué versión está corriendo: 7 caracteres del commit desplegado, o
+   * `development` / `unknown` cuando no hay ninguno.
+   *
+   * Existe por una pregunta que no se pudo contestar cuando hizo falta. Un
+   * deploy subió código que consultaba una columna que la base todavía no
+   * tenía, y desde afuera no había forma de saber qué commit estaba vivo:
+   * `/health` decía `ok` y no decía nada más. Esto lo vuelve una consulta de
+   * un segundo.
+   *
+   * Es un campo derivado, no la variable. El SHA completo nunca entra a
+   * `AppEnv`, así que no hay nada que filtrar por descuido.
+   */
+  readonly version: string;
+}
+
+/** Lo que se muestra del commit. Alcanza para identificarlo sin ser ruido. */
+const SHORT_SHA_LENGTH = 7;
+
+/**
+ * Deriva la versión desplegada de lo que inyecte el host.
+ *
+ * El valor se **valida** antes de recortarlo. `/health` es público y sin
+ * autenticación: lo que sale de ahí tiene que ser algo que reconocimos como un
+ * SHA, no el contenido de una variable de entorno cualquiera.
+ */
+function deployedVersion(source: NodeJS.ProcessEnv, isProduction: boolean): string {
+  const sha = source.RAILWAY_GIT_COMMIT_SHA?.trim() ?? '';
+  if (/^[0-9a-f]{7,40}$/i.test(sha)) return sha.slice(0, SHORT_SHA_LENGTH).toLowerCase();
+
+  // Sin SHA hay dos situaciones distintas y conviene no confundirlas: en una
+  // máquina de desarrollo es lo normal; en producción significa que el host no
+  // lo inyectó, y responder `development` ahí sería afirmar algo falso sobre
+  // lo que está corriendo.
+  return isProduction ? 'unknown' : 'development';
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
@@ -188,16 +223,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     );
   }
 
+  const isProduction = env.NODE_ENV === 'production';
+
   return {
     ...env,
-    TRUST_PROXY: normalized.TRUST_PROXY === undefined
-      ? env.NODE_ENV === 'production'
-      : env.TRUST_PROXY,
+    TRUST_PROXY: normalized.TRUST_PROXY === undefined ? isProduction : env.TRUST_PROXY,
     corsOrigins: env.WEB_ORIGIN.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
-    isProduction: env.NODE_ENV === 'production',
+    isProduction,
     isTest: env.NODE_ENV === 'test',
+    // Se lee de `normalized` y no del esquema a propósito: así el SHA completo
+    // no forma parte de `AppEnv` y no hay manera de exponerlo sin querer.
+    version: deployedVersion(normalized, isProduction),
   };
 }
 

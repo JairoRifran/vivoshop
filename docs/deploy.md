@@ -349,6 +349,30 @@ apuntando a Supabase:
 pnpm --filter @vivo/api db:migrate
 ```
 
+### Qué versión está viva
+
+`/health` publica el commit desplegado:
+
+```json
+{ "status": "ok", "version": "cd206a6", "dataDriver": "postgres", ... }
+```
+
+Sale de `RAILWAY_GIT_COMMIT_SHA`, que Railway inyecta solo; no hay que
+configurar nada. Fuera de un deploy dice `development`, y en producción sin
+commit inyectado dice `unknown` — que no es lo mismo y por eso se distinguen.
+
+Existe por una pregunta que no se pudo contestar cuando hizo falta: durante la
+caída de M03, `/health` decía `ok` y no había forma de saber desde afuera qué
+commit estaba corriendo. Ahora es una consulta de un segundo:
+
+```bash
+curl -s https://<tu-api>.up.railway.app/health
+```
+
+El valor se valida como SHA antes de recortarlo. `/health` es público, así que
+lo que sale de ahí es algo que el proceso reconoció, no el contenido de una
+variable de entorno.
+
 ---
 
 ## 5. Mercado Pago — los cobros (opcional)

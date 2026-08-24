@@ -62,9 +62,25 @@ afterAll(async () => {
 });
 
 describe('health and configuration', () => {
-  it('reports the active drivers', async () => {
+  it('reports the active drivers and the deployed version', async () => {
     const response = await http().get('/health').expect(200);
-    expect(response.body).toMatchObject({ status: 'ok', dataDriver: 'memory' });
+
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      dataDriver: 'memory',
+      // Sin commit inyectado, que es lo que pasa fuera de un deploy.
+      version: 'development',
+    });
+
+    // Y nada más. Este endpoint es público: cada campo que se agregue acá lo
+    // ve cualquiera, así que la lista se revisa a propósito.
+    expect(Object.keys(response.body).sort()).toEqual([
+      'cacheDriver',
+      'dataDriver',
+      'status',
+      'uptimeSeconds',
+      'version',
+    ]);
   });
 
   it('exposes the market configuration the clients render from', async () => {

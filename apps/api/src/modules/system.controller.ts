@@ -16,11 +16,20 @@ export class SystemController {
     @Inject(ENV) private readonly env: AppEnv,
   ) {}
 
+  /**
+   * Estado del proceso.
+   *
+   * `version` son los 7 caracteres del commit desplegado. Lo que se publica
+   * acá es deliberadamente poco —qué drivers están activos, hace cuánto
+   * arrancó y qué commit es— porque es un endpoint público: alcanza para
+   * diagnosticar un deploy y no describe la infraestructura.
+   */
   @Public()
   @Get('health')
   health() {
     return {
       status: 'ok',
+      version: this.env.version,
       dataDriver: this.env.DATA_DRIVER,
       cacheDriver: this.env.CACHE_DRIVER,
       uptimeSeconds: Math.round(process.uptime()),
