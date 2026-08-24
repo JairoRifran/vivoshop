@@ -1,5 +1,6 @@
 import type { CountryCode, CurrencyCode, DeliveryKind } from '@vivo/config';
 import { DomainError } from '../errors';
+import type { PaymentStatus } from './payment';
 import type { TaxSnapshot } from '../services/tax';
 import type {
   AddressId,
@@ -66,8 +67,16 @@ export function timelineIndex(status: OrderStatus): number {
 
 // --- Payment ----------------------------------------------------------------
 
-export const PAYMENT_STATUSES = ['pending', 'authorized', 'paid', 'failed', 'refunded'] as const;
-export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+/**
+ * El estado del pago visto desde el pedido.
+ *
+ * Es el mismo vocabulario que usa la entidad `Payment`, importado y no
+ * redefinido: dos listas de estados que quieren decir lo mismo se separan a la
+ * primera de cambio, y el día que se separen alguien va a ver "pagado" en una
+ * pantalla y "pendiente" en la otra.
+ */
+export type { PaymentStatus } from './payment';
+export { PAYMENT_STATUSES } from './payment';
 
 export interface OrderPayment {
   /** Market-config payment method id, e.g. `uy-mercadopago`. */
@@ -116,6 +125,16 @@ export interface OrderDelivery {
  * product is renamed, repriced or deleted, so titles, images and prices are
  * copied at purchase time rather than joined at read time.
  */
+/**
+ * Cómo se fijó el precio de una línea.
+ *
+ * `accepted_bid` todavía no lo produce nadie: queda declarado para que M04
+ * —oferta aceptada, precio final, reserva, mismo checkout— no tenga que migrar
+ * pedidos existentes ni agregar una columna a una tabla con datos.
+ */
+export const PRICE_SOURCES = ['catalog', 'accepted_bid'] as const;
+export type PriceSource = (typeof PRICE_SOURCES)[number];
+
 export interface OrderItem {
   readonly productId: ProductId;
   readonly variantId: VariantId;
@@ -123,6 +142,16 @@ export interface OrderItem {
   readonly variantLabelSnapshot: string;
   readonly imageUrlSnapshot: string | null;
   readonly unitPriceMinor: number;
+  /**
+   * De dónde salió `unitPriceMinor`.
+   *
+   * Hoy siempre es el catálogo. Existe ahora porque el precio final de una
+   * línea no siempre va a serlo: cuando entre el modo puja, una oferta
+   * aceptada va a producir un precio que no está en ninguna ficha. Guardar el
+   * origen desde el principio evita tener que adivinar después por qué un
+   * pedido viejo tiene un número que no coincide con el catálogo.
+   */
+  readonly priceSource: PriceSource;
   readonly quantity: number;
   readonly subtotalMinor: number;
   /**

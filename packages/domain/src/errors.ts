@@ -38,7 +38,22 @@ export type DomainErrorCode =
   /** The caller may not broadcast into this session. */
   | 'NOT_BROADCASTER'
   /** The streaming provider refused or is unreachable. */
-  | 'STREAMING_UNAVAILABLE';
+  | 'STREAMING_UNAVAILABLE'
+  // --- Payments and trust (M03) -----------------------------------------
+  /** The payment cannot move to that status from where it is. */
+  | 'INVALID_PAYMENT_TRANSITION'
+  /** The seller has not connected an account able to receive money. */
+  | 'SELLER_PAYMENT_ACCOUNT_MISSING'
+  /** The connected account exists but cannot be used right now. */
+  | 'SELLER_PAYMENT_ACCOUNT_INVALID'
+  /** The payment provider refused or is unreachable. */
+  | 'PAYMENT_UNAVAILABLE'
+  /** The OAuth callback did not carry a state we issued, or it expired. */
+  | 'INVALID_OAUTH_STATE'
+  /** The verification cannot move to that status from where it is. */
+  | 'INVALID_VERIFICATION_TRANSITION'
+  /** The submitted commercial details are incomplete. */
+  | 'VERIFICATION_DETAILS_INCOMPLETE';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

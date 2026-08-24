@@ -33,6 +33,9 @@ export function buildOrderItem(
     variantLabelSnapshot: variantLabel(variant),
     imageUrlSnapshot: product.images[0]?.url ?? null,
     unitPriceMinor: unitPrice.amountMinor,
+    // El catálogo es la única fuente de precio que existe hoy. M04 va a poder
+    // producir `accepted_bid` sin tocar esta función.
+    priceSource: 'catalog',
     quantity,
     subtotalMinor,
     taxCategory: rule.category,
