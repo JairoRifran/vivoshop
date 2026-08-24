@@ -69,6 +69,48 @@ test('a buyer discovers a live, buys from it and finds the order', async ({ page
   expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
 });
 
+/**
+ * El camino con envío a domicilio, que es el que viene por defecto.
+ *
+ * La prueba de arriba elige retiro en tienda para acortar el formulario, y ese
+ * atajo escondió un fallo real: con envío a domicilio la dirección es
+ * obligatoria, sus campos quedan debajo del pliegue, y el navegador bloqueaba
+ * el envío sin que se viera nada. Desde el teléfono parecía que el botón no
+ * funcionaba — y después del primer toque dejaba de funcionar de verdad.
+ */
+test('con envío a domicilio, el formulario avisa qué falta en vez de no hacer nada', async ({
+  page,
+}) => {
+  await signIn(page, DEMO.buyer, '/');
+
+  // Directo a la ficha del producto: es el camino más corto y no depende de
+  // qué esté transmitiendo en ese momento.
+  await page.goto('/producto/campera-roma');
+  await page.getByRole('button', { name: 'Comprar ahora' }).click();
+  await page.waitForURL(/\/checkout/);
+  await expect(page.getByRole('heading', { name: 'Finalizar compra' })).toBeVisible();
+
+  // Envío a domicilio: la dirección pasa a ser obligatoria.
+  await page.getByText('Envío a domicilio').click();
+  const pay = page.getByRole('button', { name: /^Pagar/ });
+
+  // Primer intento con la dirección vacía: no compra, y el botón NO queda
+  // muerto — que era el segundo defecto.
+  await pay.click();
+  await expect(page).toHaveURL(/\/checkout/);
+  await expect(pay).toBeEnabled();
+
+  // Completar y volver a intentar tiene que funcionar con el mismo botón.
+  await page.getByLabel('Nombre y apellido').fill('Ana Pérez');
+  await page.getByLabel('Teléfono').fill('099 123 456');
+  await page.getByLabel('Localidad').fill('Pocitos');
+  await page.getByLabel('Dirección').fill('Av. Brasil 2500 apto 301');
+
+  await pay.click();
+  await page.waitForURL(/\/compras\//, { timeout: 25_000 });
+  await expect(page.getByText('¡Compra confirmada!')).toBeVisible();
+});
+
 test('buying while signed out asks to sign in and keeps the intent', async ({ page }) => {
   await page.goto('/producto/campera-roma');
 

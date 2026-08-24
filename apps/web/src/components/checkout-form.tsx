@@ -77,6 +77,28 @@ export function CheckoutForm({
     if (!submitting) submitGuard.current = false;
   }, [submitting]);
 
+  /**
+   * Un checkout no puede fallar en silencio.
+   *
+   * El método por defecto es envío a domicilio, que exige dirección, y esos
+   * campos quedan **debajo del pliegue**. El navegador bloquea el envío y
+   * reporta el primer campo inválido donde esté: detrás de la barra fija o
+   * fuera de pantalla. Desde el teléfono se ve como que el botón no hace nada.
+   *
+   * Devuelve true cuando el formulario está listo para enviarse. Si no, trae
+   * el campo que falta a la vista y deja que el navegador lo señale.
+   */
+  const readyToSubmit = (form: HTMLFormElement): boolean => {
+    if (form.checkValidity()) return true;
+
+    const firstInvalid = form.querySelector<HTMLElement>(
+      'input:invalid, select:invalid, textarea:invalid',
+    );
+    firstInvalid?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    form.reportValidity();
+    return false;
+  };
+
   const allowed = useMemo(
     () => delivery.filter((method) => store.deliveryMethodIds.includes(method.id)),
     [delivery, store.deliveryMethodIds],
@@ -399,6 +421,17 @@ export function CheckoutForm({
             loading={submitting}
             disabled={submitting || recalculating}
             onClick={(event) => {
+              const form = event.currentTarget.form;
+              // Se arma el guard sólo cuando el envío va a ocurrir de verdad.
+              // Antes se armaba siempre: si el primer toque quedaba bloqueado
+              // por validación, `submitting` nunca pasaba a true, el efecto que
+              // lo desarma nunca corría, y el botón quedaba muerto para
+              // siempre — incluso después de completar la dirección.
+              if (form && !readyToSubmit(form)) {
+                event.preventDefault();
+                return;
+              }
+
               // A second tap before React re-renders would submit the form
               // twice; the server would deduplicate it, but the buyer would
               // still see a flash of the wrong thing.
