@@ -172,6 +172,40 @@ registra— y las pantallas vacías que ya existen se encargan del resto.
 
 5. Health check: `/health`. Ya está declarado en `railway.json`.
 
+### El puerto, que es donde se pierde una tarde
+
+Railway inyecta `PORT` con **su** valor —8080 por defecto— y la aplicación lo
+lee como `API_PORT`. Pero el dominio público enruta al puerto que uno elige al
+generarlo, y **si los dos no coinciden, cada pedido devuelve 502 "Application
+failed to respond"**.
+
+Lo desagradable es que no parece un problema de puertos: el despliegue figura
+`ACTIVE`, el build salió bien, y los logs muestran la aplicación arrancando sin
+un solo error. Los logs son justamente donde está la respuesta:
+
+```
+[Persistence] Driver postgres: conexión verificada.
+[Bootstrap]   Vivo API en http://localhost:8080     <- escucha acá
+                                             ^^^^
+```
+
+Dos formas de alinearlos; da igual cuál, pero hay que elegir una:
+
+- Fijar `PORT=4000` como variable del servicio (queda consistente con el
+  `EXPOSE` y el healthcheck del Dockerfile), o
+- Editar el dominio y apuntarlo al puerto que Railway ya inyectó.
+
+### Región
+
+Railway despliega en la región de la cuenta —`EU West` por defecto— y Supabase
+quedó en `sa-east-1`. Con esa combinación **cada consulta cruza el Atlántico**:
+unos 200 ms de ida y vuelta, y el checkout hace varias dentro de una misma
+transacción.
+
+Funciona, pero no es lo que debería. Para Uruguay conviene mover el servicio a
+`us-east` o `sa-east` y quedar cerca de la base. Es un cambio de región del
+servicio, no de código.
+
 ### Una sola instancia, a propósito
 
 `numReplicas: 1` en `railway.json` no es pereza. Con dos instancias:
@@ -284,10 +318,10 @@ de probar en la LAN, donde hace falta un túnel (ver
 | Arranque en modo producción con `PORT` inyectado | **VERIFICADO** — `PORT=4400`, `/health` respondió |
 | La API se niega a arrancar con el `JWT_SECRET` de desarrollo | **VERIFICADO** |
 | `WEB_ORIGIN` aplicado como allowlist de CORS | **VERIFICADO** |
-| Build del Dockerfile | **NO VERIFICADO** — no hay Docker en la máquina donde se escribió |
+| Build del Dockerfile | **VERIFICADO** — construido y desplegado por Railway |
 | Conexión real a Supabase | **VERIFICADO** — migraciones, seed y `db:smoke` 10/10 contra PostgreSQL 17.6 |
 | TLS verificado con la CA de Supabase | **VERIFICADO** — sin la CA la conexión se rechaza, que es lo correcto |
-| Deploy real en Railway | **NO VERIFICADO** |
+| Deploy real en Railway | **VERIFICADO** — `/health` en 200, CORS correcto, registro real contra Supabase |
 | Deploy real en Vercel | **VERIFICADO** — vivoshop-web.vercel.app, 13 rutas barridas |
 
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
