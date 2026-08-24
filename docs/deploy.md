@@ -49,20 +49,30 @@ que soporta lo que M02 construyó.
    Si la contraseña tiene caracteres raros (`@`, `:`, `/`, `#`), hay que
    escaparlos en porcentaje o la URL se parsea mal.
 
-### TLS
+### TLS — resuelto, y vale entender por qué
 
-`node-postgres` **no** activa TLS solo porque la URL diga `sslmode=require`, así
-que la decisión se toma en el código (`DATABASE_SSL`). Con `auto` — el valor por
-defecto — cualquier host que no sea localhost usa TLS verificado.
+Supabase firma su certificado con su propia CA, así que Node rechaza la
+conexión con `self signed certificate in certificate chain`. La CA pública ya
+está versionada en el repositorio:
 
-Si al conectar aparece `self signed certificate in certificate chain`, es que
-Supabase está presentando su propia CA. Dos salidas, en orden de preferencia:
+```
+DATABASE_CA_CERT=./certs/supabase-prod-ca.crt
+```
 
-1. **Bajar el certificado** (Project Settings → Database → SSL Configuration) y
-   pegar el PEM en `DATABASE_CA_CERT`. Cifra **y** verifica quién está del otro
-   lado.
-2. `DATABASE_SSL=no-verify`. Cifra pero no verifica: queda abierta la puerta a
-   un intermediario activo. Sirve para salir del paso, no para quedarse.
+`DATABASE_CA_CERT` acepta una ruta, el PEM completo, o un PEM con los saltos de
+línea escapados — que es como los pega un panel de variables de entorno.
+
+Hay una trampa que costó un rato: **`node-postgres` parsea el `sslmode` de la
+URL y con eso pisa la configuración TLS que se le pasa al lado**. Como Supabase
+entrega la cadena con `?sslmode=require` incluido, `DATABASE_SSL` y
+`DATABASE_CA_CERT` no hacían nada en absoluto, y el error se repetía sin
+importar qué se configurara. `client.ts` ahora limpia esos parámetros de la URL
+y decide el TLS en un solo lugar — el mismo que usan el migrador, el seed y el
+smoke test.
+
+La alternativa, `DATABASE_SSL=no-verify`, cifra pero no comprueba con quién
+habla: deja la puerta abierta a un intermediario activo. Con la CA en el
+repositorio no hay motivo para usarla.
 
 ### Migrar y sembrar
 
@@ -116,7 +126,7 @@ ese servidor. Si pasa, la base está lista.
    DATA_DRIVER=postgres
    CACHE_DRIVER=memory
    DATABASE_URL=postgresql://postgres.<ref>:...@aws-0-<region>.pooler.supabase.com:5432/postgres
-   DATABASE_SSL=auto
+   DATABASE_CA_CERT=./certs/supabase-prod-ca.crt
    JWT_SECRET=<32+ caracteres aleatorios, generados, no inventados>
    WEB_ORIGIN=https://<tu-app>.vercel.app
    RATE_LIMIT=120
@@ -247,9 +257,10 @@ de probar en la LAN, donde hace falta un túnel (ver
 | La API se niega a arrancar con el `JWT_SECRET` de desarrollo | **VERIFICADO** |
 | `WEB_ORIGIN` aplicado como allowlist de CORS | **VERIFICADO** |
 | Build del Dockerfile | **NO VERIFICADO** — no hay Docker en la máquina donde se escribió |
-| Conexión real a Supabase | **NO VERIFICADO** — no hay proyecto todavía |
+| Conexión real a Supabase | **VERIFICADO** — migraciones, seed y `db:smoke` 10/10 contra PostgreSQL 17.6 |
+| TLS verificado con la CA de Supabase | **VERIFICADO** — sin la CA la conexión se rechaza, que es lo correcto |
 | Deploy real en Railway | **NO VERIFICADO** |
-| Deploy real en Vercel | **NO VERIFICADO** |
+| Deploy real en Vercel | **VERIFICADO** — vivoshop-web.vercel.app, 13 rutas barridas |
 
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
 pero solo tres de esas filas se ejecutaron. Las otras se confirman en el primer

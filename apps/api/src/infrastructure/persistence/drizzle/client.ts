@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { Pool, type PoolConfig } from 'pg';
@@ -23,21 +24,34 @@ export interface DatabaseTls {
   readonly caCert?: string | undefined;
 }
 
-export function createDatabase(
+/**
+ * Exported so every script that opens its own pool — the migrator, the seed,
+ * the smoke test — negotiates TLS the same way the running API does. When they
+ * each built their own config, the smoke test failed against a managed
+ * database while the API connected fine.
+ */
+export function buildPoolConfig(
   connectionString: string,
   tls: DatabaseTls = { mode: 'auto' },
-): { db: VivoDatabase; pool: Pool } {
+): PoolConfig {
   const config: PoolConfig = {
-    connectionString,
+    connectionString: withoutSslParams(connectionString),
     max: 10,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
   };
 
   const ssl = resolveSsl(connectionString, tls);
   if (ssl !== undefined) config.ssl = ssl;
 
-  const pool = new Pool(config);
+  return config;
+}
+
+export function createDatabase(
+  connectionString: string,
+  tls: DatabaseTls = { mode: 'auto' },
+): { db: VivoDatabase; pool: Pool } {
+  const pool = new Pool(buildPoolConfig(connectionString, tls));
   return { db: drizzle(pool, { schema }), pool };
 }
 
@@ -58,13 +72,54 @@ function resolveSsl(
 
   // A CA always wins: it is the only option that both encrypts and proves who
   // is on the other end.
-  if (tls.caCert) return { ca: tls.caCert, rejectUnauthorized: true };
+  const ca = readCaCert(tls.caCert);
+  if (ca) return { ca, rejectUnauthorized: true };
 
   if (tls.mode === 'no-verify') return { rejectUnauthorized: false };
   if (tls.mode === 'require') return { rejectUnauthorized: true };
 
   // auto: local development is plaintext, everything else is verified TLS.
   return isLocal(connectionString) ? undefined : { rejectUnauthorized: true };
+}
+
+/**
+ * Drops `sslmode` and friends from the connection string.
+ *
+ * `pg` parses those parameters and builds its own `ssl` object from them,
+ * which then **overrides** the one passed alongside. The effect is silent and
+ * confusing: a URL ending in `?sslmode=require` makes `DATABASE_SSL` and
+ * `DATABASE_CA_CERT` do nothing at all, and the connection keeps failing with
+ * `self-signed certificate in certificate chain` no matter what is set.
+ *
+ * Managed providers hand out URLs with `sslmode` baked in, so this is the
+ * normal case, not an edge one. TLS is decided in `resolveSsl` and nowhere
+ * else.
+ */
+function withoutSslParams(connectionString: string): string {
+  try {
+    const url = new URL(connectionString);
+    for (const key of ['sslmode', 'ssl', 'sslrootcert', 'uselibpqcompat']) {
+      url.searchParams.delete(key);
+    }
+    return url.toString();
+  } catch {
+    // Not a URL we can parse — hand it back untouched rather than guess.
+    return connectionString;
+  }
+}
+
+/** Accepts the PEM itself, a path to it, or a PEM with escaped newlines. */
+function readCaCert(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  // Env vars in a dashboard often arrive with the newlines escaped.
+  if (trimmed.includes('BEGIN CERTIFICATE')) return trimmed.replace(/\\n/g, '\n');
+
+  // A path. Relative ones resolve from the working directory, which for the
+  // API is `apps/api` both in development and inside the container.
+  return existsSync(trimmed) ? readFileSync(trimmed, 'utf8') : undefined;
 }
 
 function isLocal(connectionString: string): boolean {

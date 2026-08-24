@@ -11,7 +11,7 @@ import { NoopRealtimePublisher } from '../../realtime/realtime.module';
 import type { StoreService } from '../../../application/services/store.service';
 import { MockPaymentProvider } from '../../providers/mock-payment.provider';
 import { SystemClock, UuidGenerator } from '../../system';
-import type { VivoDatabase } from './client';
+import { buildPoolConfig, type VivoDatabase } from './client';
 import { DrizzleOrderTransactionRunner } from './drizzle.order-transaction';
 import { DrizzleOrderRepository, DrizzleProductRepository } from './drizzle.repositories';
 import { toStore } from './mappers';
@@ -104,7 +104,16 @@ async function main(): Promise<void> {
 
   // A pool, not a single client: the concurrency check needs real parallel
   // connections, which is the whole reason this script exists.
-  const pool = new Pool({ connectionString: url, max: 8 });
+  // Same TLS negotiation as the API: a managed database presents its own CA,
+  // and building the config here by hand is how this script used to fail
+  // against a server the API could reach without trouble.
+  const pool = new Pool({
+    ...buildPoolConfig(url, {
+      mode: (process.env.DATABASE_SSL as 'auto' | 'require' | 'no-verify' | 'disable') ?? 'auto',
+      caCert: process.env.DATABASE_CA_CERT,
+    }),
+    max: 8,
+  });
 
   try {
     // --- 1. Connectivity ---------------------------------------------------
