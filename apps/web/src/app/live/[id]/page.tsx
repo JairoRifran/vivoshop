@@ -1,6 +1,7 @@
 import { isApiError } from '@vivo/shared';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { ConnectionError } from '@/components/connection-error';
 import { LiveViewer } from '@/components/live/live-viewer';
 import { realtimeToken } from '@/lib/actions/social';
 import { api, getCurrentUser, safe } from '@/lib/api';
@@ -56,6 +57,11 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
     session = await client.live.byId(id);
   } catch (error) {
     if (isApiError(error) && error.isNotFound) notFound();
+    if (isApiError(error) && error.isOffline) {
+      return (
+        <ConnectionError hint="No pudimos cargar la transmisión. Probá de nuevo en unos segundos." />
+      );
+    }
     throw error;
   }
 

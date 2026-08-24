@@ -3,6 +3,7 @@ import { Avatar } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ConnectionError } from '@/components/connection-error';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
 import { ProductPanel } from '@/components/product-panel';
 import { api } from '@/lib/api';
@@ -39,6 +40,10 @@ export default async function ProductPage({
     product = await client.products.byId(id);
   } catch (error) {
     if (isApiError(error) && error.isNotFound) notFound();
+    // Un fallo de red no es un 404 ni un error de la aplicación: la API se
+    // está reiniciando o la conexión se cortó. Cualquier otra cosa sí sube,
+    // porque es un bug y tiene que verse en los logs.
+    if (isApiError(error) && error.isOffline) return <ConnectionError />;
     throw error;
   }
 
