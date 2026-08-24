@@ -27,21 +27,27 @@ que soporta lo que M02 construyó.
 1. Crear un proyecto en [supabase.com](https://supabase.com). Elegir la región
    más cercana a los usuarios (para Uruguay: **South America (São Paulo)**).
 2. Guardar la contraseña de la base: Supabase la muestra una sola vez.
-3. **Project Settings → Database → Connection string → URI.**
+3. **Project Settings → Database → Connection string.** Hay tres, y elegir mal
+   se paga con un error de red que parece cualquier otra cosa:
 
-   Hay dos cadenas y la diferencia importa:
-
-   | Cadena | Puerto | Cuándo |
+   | Cadena | Host y puerto | Veredicto |
    | --- | --- | --- |
-   | **Direct connection** | 5432 | **Esta.** La API es un proceso largo con un pool propio. |
-   | Transaction pooler | 6543 | Para serverless. Innecesario acá, y limita transacciones. |
+   | Direct connection | `db.<ref>.supabase.co:5432` | **Solo IPv6.** Desde 2024 Supabase no da IPv4 acá sin un add-on pago. Si tu red o tu host no tienen IPv6, falla con `ENETUNREACH` o un timeout sin explicación. |
+   | **Session pooler** | `aws-0-<region>.pooler.supabase.com:5432` | **Esta.** IPv4, modo sesión: se comporta como una conexión directa, con transacciones y sentencias preparadas completas. Es lo que necesita un proceso largo con pool propio. |
+   | Transaction pooler | `...pooler.supabase.com:6543` | Para serverless. Modo transacción: sin sentencias preparadas y con límites que este proyecto no necesita aceptar. |
+
+   El usuario del pooler lleva el ref del proyecto adentro
+   (`postgres.<ref>`), no es solo `postgres`.
 
 4. La variable queda así:
 
    ```
-   DATABASE_URL=postgresql://postgres:LA_PASSWORD@db.<ref>.supabase.co:5432/postgres
+   DATABASE_URL=postgresql://postgres.<ref>:LA_PASSWORD@aws-0-<region>.pooler.supabase.com:5432/postgres
    DATA_DRIVER=postgres
    ```
+
+   Si la contraseña tiene caracteres raros (`@`, `:`, `/`, `#`), hay que
+   escaparlos en porcentaje o la URL se parsea mal.
 
 ### TLS
 

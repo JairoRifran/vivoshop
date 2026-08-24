@@ -20,6 +20,7 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @vivo/api db:generate",
     "db:push": "pnpm --filter @vivo/api db:push",
+    "db:migrate": "pnpm --filter @vivo/api db:migrate",
     "db:seed": "pnpm --filter @vivo/api db:seed",
     "clean": "turbo run clean && rimraf node_modules",
     "test:e2e:install": "pnpm --filter @vivo/web exec playwright install --with-deps chromium",
