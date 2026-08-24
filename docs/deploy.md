@@ -116,6 +116,21 @@ ese servidor. Si pasa, la base está lista.
 > una base que no sea local. Vale conocerlo igual, porque el mismo patrón
 > —decidir algo en tiempo de importación— puede repetirse en otro lado.
 
+### Sacar los datos de demo
+
+Para una URL pública, el seed es un problema: trae cuentas con contraseña
+`vivo1234`, una de ellas vendedora, que cualquiera que lea el repositorio puede
+usar.
+
+```bash
+pnpm db:clear
+```
+
+Vacía las mismas tablas que el seed llena, en el mismo orden, y deja el esquema
+y las migraciones intactos. Después de eso la aplicación arranca sin tiendas
+—que es como arranca de verdad: la primera tienda es la primera persona que se
+registra— y las pantallas vacías que ya existen se encargan del resto.
+
 > **Los datos de demo traen usuarios con contraseña `vivo1234`.** En una URL
 > pública eso es una cuenta de vendedor abierta para cualquiera que lea el
 > README. Está bien para mostrar el producto; no lo está para nada más. Cuando

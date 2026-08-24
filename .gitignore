@@ -39,3 +39,7 @@ pnpm-debug.log*
 # Local data
 docker/pgdata/
 .next-lk/
+
+# Secretos temporales del despliegue
+.jwt-secret.tmp
+.railway-vars.tmp
