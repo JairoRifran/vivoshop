@@ -491,7 +491,8 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 | TLS verificado con la CA de Supabase | **VERIFICADO** — sin la CA la conexión se rechaza, que es lo correcto |
 | Deploy real en Railway | **VERIFICADO** — `/health` en 200, CORS correcto, registro real contra Supabase |
 | Deploy real en Vercel | **VERIFICADO** — vivoshop-web.vercel.app, 13 rutas barridas |
-| Migraciones aplicadas en el deploy | **VERIFICADO a mano** — las de M03 se aplicaron con `db:migrate` contra Supabase y `/stores`, `/products` y `/live` volvieron a 200. El `preDeployCommand` que lo automatiza está **NO VERIFICADO**: se prueba en el próximo deploy. |
+| Migraciones aplicadas en el deploy | **VERIFICADO** — el `preDeployCommand` aplicó `0006_m04_bid_mode` solo. La prueba es que `/bids` consulta `bid_sessions` y devuelve 200: sin la migración daría 500. En Supabase quedan 7 migraciones registradas. |
+| Modo Puja en producción | **PARCIAL** — esquema, versión desplegada (`/health` devuelve el commit) y rutas verificados. Una puja real de punta a punta **NO** se ejecutó: exige poner la tienda al aire, y eso es tuyo. |
 | Cobros con Mercado Pago en producción | **NO VERIFICADO** — el despliegue sigue con `PAYMENT_PROVIDER=fake`. No se ejecutó ningún cobro real ni de prueba contra Mercado Pago. Ver `docs/m03.md` §17. |
 
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
