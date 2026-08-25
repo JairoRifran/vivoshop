@@ -1,5 +1,6 @@
 'use client';
 
+import { REALTIME_EVENTS } from '@vivo/domain';
 import type { LiveMessageDto } from '@vivo/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
@@ -18,16 +19,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
  * Everything below is a transport detail. Components consume plain values.
  */
 
-/** Mirrors `REALTIME_EVENTS` in `@vivo/domain`. */
-const EVENTS = {
-  liveState: 'live.state',
-  viewerCount: 'viewer.count',
-  chatMessage: 'chat.message',
-  reactionBurst: 'reaction.burst',
-  productFeatured: 'product.featured',
-  orderCreated: 'order.created',
-  saleAnnounced: 'sale.announced',
-} as const;
+/**
+ * Los nombres de los eventos salen del dominio, no de una copia.
+ *
+ * Antes esto era un objeto espejo con un comentario que pedía mantenerlo
+ * sincronizado a mano. Con siete eventos nuevos, esa promesa se rompe: el
+ * cliente y el servidor tienen que estar de acuerdo en literales de texto, y
+ * la única forma de garantizarlo es que sean el mismo literal.
+ */
+const EVENTS = REALTIME_EVENTS;
 
 const HEARTBEAT_MS = 25_000;
 
@@ -56,7 +56,43 @@ export interface SaleAnnouncedEvent {
   productTitle: string;
 }
 
+/**
+ * Modo Puja.
+ *
+ * Un solo handler para los siete eventos en vez de siete callbacks: lo que la
+ * pantalla hace con todos es lo mismo —volver a pedir el estado de la puja al
+ * servidor— y siete props que se pasan en cadena serían siete oportunidades de
+ * olvidarse una.
+ *
+ * Se re-consulta en vez de aplicar el evento como parche porque el servidor ya
+ * calcula el mínimo siguiente, quién lidera y cuánto queda de reserva. Que el
+ * navegador lo recalcule sería una segunda implementación de las mismas reglas
+ * — y la que se equivoque no va a ser la del servidor.
+ */
+export interface BidEvent {
+  liveSessionId: string;
+  bidSessionId: string;
+  bidId?: string;
+  bidderName?: string;
+  bidderAvatarUrl?: string | null;
+  amountMinor?: number;
+  currency?: string;
+  nextMinimumMinor?: number;
+  reservedUntil?: string | null;
+  reason?: string;
+}
+
+export type BidEventName =
+  | 'opened'
+  | 'placed'
+  | 'leading'
+  | 'accepted'
+  | 'closed'
+  | 'expired'
+  | 'sold';
+
 export interface RealtimeHandlers {
+  onBid?: (name: BidEventName, event: BidEvent) => void;
   onState?: (event: LiveStateEvent) => void;
   onViewerCount?: (count: number) => void;
   onMessage?: (message: LiveMessageDto) => void;
@@ -151,6 +187,19 @@ export function useLiveRealtime(
       socket.on(EVENTS.saleAnnounced, (event: SaleAnnouncedEvent) =>
         handlersRef.current.onSale?.(event),
       );
+
+      const bidEvents: ReadonlyArray<[string, BidEventName]> = [
+        [EVENTS.bidOpened, 'opened'],
+        [EVENTS.bidPlaced, 'placed'],
+        [EVENTS.bidLeadingChanged, 'leading'],
+        [EVENTS.bidAccepted, 'accepted'],
+        [EVENTS.bidClosed, 'closed'],
+        [EVENTS.bidReservationExpired, 'expired'],
+        [EVENTS.bidSold, 'sold'],
+      ];
+      for (const [event, name] of bidEvents) {
+        socket.on(event, (payload: BidEvent) => handlersRef.current.onBid?.(name, payload));
+      }
 
       // Presence has a TTL on the server so a phone in a tunnel stops counting.
       // This is what keeps an honest long watch from being reaped with it.

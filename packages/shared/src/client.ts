@@ -6,6 +6,7 @@ import type {
   LiveMessageDto,
   LiveStatsDto,
   LiveSummaryDto,
+  BidSessionDto,
   DisputeDto,
   OrderDto,
   PaymentCapabilitiesDto,
@@ -23,7 +24,10 @@ import type {
   ViewerTokenResponseDto,
 } from './schemas/entities';
 import type {
+  AcceptBidRequest,
   BusinessVerificationRequest,
+  OpenBidSessionRequest,
+  SubmitBidRequest,
   IdentityVerificationRequest,
   OpenDisputeRequest,
   SimulatePaymentRequest,
@@ -282,6 +286,38 @@ export function createApiClient(options: ApiClientOptions) {
         request<VerificationStatusDto | null>('GET', '/me/verification', undefined, init),
       submitIdentity: (input: IdentityVerificationRequest) =>
         request<VerificationStatusDto>('POST', '/me/verification', input),
+    },
+
+    bids: {
+      /** Público: las pujas de un vivo se ven sin cuenta, como el vivo. */
+      forLive: (liveSessionId: string, init?: RequestInit) =>
+        request<BidSessionDto[]>('GET', '/bids', undefined, {
+          ...init,
+          query: { liveSessionId },
+        }),
+      byId: (id: string, init?: RequestInit) =>
+        request<BidSessionDto>('GET', `/bids/${id}`, undefined, init),
+      /**
+       * Ofertar. Exige sesión iniciada.
+       *
+       * Va por HTTP y no por el socket a propósito: el socket reparte lo que
+       * ya ocurrió, y aceptar una oferta que llega por ahí sería confiar en un
+       * canal que no pasa por validación ni por transacción.
+       */
+      submit: (bidSessionId: string, input: SubmitBidRequest) =>
+        request<BidSessionDto>('POST', `/bids/${bidSessionId}/offers`, input),
+
+      // --- Vendedor ---
+      mine: (init?: RequestInit) =>
+        request<BidSessionDto[]>('GET', '/seller/bids', undefined, init),
+      open: (input: OpenBidSessionRequest) =>
+        request<BidSessionDto>('POST', '/seller/bids', input),
+      accept: (bidSessionId: string, input: AcceptBidRequest) =>
+        request<BidSessionDto>('POST', `/seller/bids/${bidSessionId}/accept`, input),
+      close: (bidSessionId: string) =>
+        request<BidSessionDto>('POST', `/seller/bids/${bidSessionId}/close`),
+      reopen: (bidSessionId: string) =>
+        request<BidSessionDto>('POST', `/seller/bids/${bidSessionId}/reopen`),
     },
 
     analytics: {

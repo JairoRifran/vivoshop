@@ -7,9 +7,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { getMarket } from '@vivo/config';
-import type { Order, OrderId, Product, Store, StoreId, UserId } from '@vivo/domain';
+import type {
+  AcceptedPrice,
+  BidSessionId,
+  Order,
+  OrderId,
+  Product,
+  Store,
+  StoreId,
+  UserId,
+} from '@vivo/domain';
 import {
   DomainError,
+  asBidId,
   asLiveSessionId,
   asOrderId,
   asProductId,
@@ -47,6 +57,7 @@ import {
   ORDER_TRANSACTION_RUNNER,
   PRODUCT_REPOSITORY,
 } from '../ports/tokens';
+import { BidService } from './bid.service';
 import { PaymentService } from './payment.service';
 import { StoreService } from './store.service';
 
@@ -81,11 +92,22 @@ export class CheckoutService {
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     private readonly storeService: StoreService,
     private readonly payments: PaymentService,
+    private readonly bidService: BidService,
   ) {}
 
   // --- Preview -------------------------------------------------------------
 
-  async preview(storeId: StoreId, input: CheckoutPreviewRequest): Promise<CheckoutPreviewDto> {
+  /**
+   * `viewerId` llega opcional porque la vista previa es pública: el precio se
+   * ve antes de iniciar sesión, y bloquearlo haría que el checkout se sienta
+   * roto. Solo hace falta para resolver una oferta aceptada, y sin sesión no
+   * hay oferta que resolver.
+   */
+  async preview(
+    storeId: StoreId,
+    input: CheckoutPreviewRequest,
+    viewerId: UserId | null = null,
+  ): Promise<CheckoutPreviewDto> {
     const store = await this.storeService.requireById(storeId);
     const market = getMarket(store.country);
 
@@ -100,7 +122,13 @@ export class CheckoutService {
     const products = await this.products.listByIds(
       input.lines.map((line) => asProductId(line.productId)),
     );
-    const lines = this.resolveLines(store, input.lines, products);
+    // El ganador de una puja tiene que ver **su** precio, no el de la ficha.
+    // Se resuelve igual que en la creación del pedido —leyendo la oferta— para
+    // que la vista previa y el cobro no puedan diferir.
+    const accepted = viewerId
+      ? (await this.resolveAcceptedPrices(viewerId, input.lines)).prices
+      : new Map();
+    const lines = this.resolveLines(store, input.lines, products, accepted);
 
     // The preview skips the address requirement: the buyer has not filled it
     // in yet, and blocking the price on it would make the form feel broken.
@@ -164,8 +192,21 @@ export class CheckoutService {
     const scope = idempotencyScope(CREATE_ORDER_OPERATION, String(buyerId));
     const requestHash = fingerprintRequest({ storeId: String(storeId), ...input });
 
+    // Fuera de la transacción y antes de abrirla: leer las ofertas aceptadas
+    // no necesita el lock del pedido, y hacerlo adentro alargaría la
+    // transacción por consultas que no compiten con nadie.
+    const accepted = await this.resolveAcceptedPrices(buyerId, input.lines);
+
     const outcome = await this.transactions.run(async (tx) =>
-      this.createInsideTransaction(tx, { buyerId, storeId, input, key, scope, requestHash }),
+      this.createInsideTransaction(tx, {
+        buyerId,
+        storeId,
+        input,
+        key,
+        scope,
+        requestHash,
+        accepted: accepted.prices,
+      }),
     );
 
     if (outcome.kind === 'replayed') {
@@ -175,6 +216,12 @@ export class CheckoutService {
         throw new NotFoundException({ code: 'NOT_FOUND', message: 'Pedido inexistente.' });
       }
       return toOrderDto(existing, outcome.store);
+    }
+
+    // La puja pasa a tener dueño: a partir de acá el stock lo gobierna el
+    // pedido, y el reloj de la reserva deja de poder devolver unidades.
+    for (const sessionId of accepted.sessions.values()) {
+      await this.bidService.attachOrder(sessionId, outcome.order.id);
     }
 
     // Fuera de la transacción: hablar con un tercero con locks tomados es
@@ -197,12 +244,13 @@ export class CheckoutService {
       key: string;
       scope: string;
       requestHash: string;
+      accepted: ReadonlyMap<string, AcceptedPrice>;
     },
   ): Promise<
     | { kind: 'created'; order: Order; store: Store }
     | { kind: 'replayed'; orderId: OrderId; store: Store }
   > {
-    const { buyerId, storeId, input, key, scope, requestHash } = context;
+    const { buyerId, storeId, input, key, scope, requestHash, accepted } = context;
 
     const claim = await tx.claimIdempotency({
       scope,
@@ -245,7 +293,7 @@ export class CheckoutService {
 
     // Read inside the transaction so prices cannot shift under the order.
     const products = await tx.loadProducts(input.lines.map((line) => asProductId(line.productId)));
-    const lines = this.resolveLines(store, input.lines, products);
+    const lines = this.resolveLines(store, input.lines, products, accepted);
 
     const draft = buildCheckoutDraft({
       store,
@@ -259,11 +307,22 @@ export class CheckoutService {
       skipStockCheck: true,
     });
 
-    const reservationLines: StockReservationLine[] = draft.reservations.map((reservation) => ({
-      productId: reservation.product.id,
-      variantId: reservation.variant.id,
-      quantity: reservation.quantity,
-    }));
+    /**
+     * Solo se reserva lo que todavía no está reservado.
+     *
+     * Una línea que viene de una oferta aceptada ya tiene su unidad tomada:
+     * `AcceptBid` la sacó de la góndola al aceptar, justamente para que nadie
+     * más se la lleve mientras el ganador paga. Volver a descontarla acá
+     * cobraría dos unidades por una compra — y el error solo aparecería en el
+     * inventario, días después.
+     */
+    const reservationLines: StockReservationLine[] = draft.reservations
+      .filter((_, index) => !input.lines[index]?.bidId)
+      .map((reservation) => ({
+        productId: reservation.product.id,
+        variantId: reservation.variant.id,
+        quantity: reservation.quantity,
+      }));
 
     const reserved = await tx.reserveStock(reservationLines);
     if (!reserved.ok) {
@@ -361,6 +420,8 @@ export class CheckoutService {
     store: Store,
     lines: CreateOrderRequest['lines'],
     products: readonly Product[],
+    /** Precios ya verificados contra la base, indexados por `bidId`. */
+    accepted: ReadonlyMap<string, AcceptedPrice> = new Map(),
   ): CheckoutLineRequest[] {
     const byId = new Map(products.map((product) => [String(product.id), product]));
 
@@ -371,11 +432,54 @@ export class CheckoutService {
           productId: line.productId,
         });
       }
+      const price = line.bidId ? accepted.get(line.bidId) : undefined;
       return {
         product,
         variantId: asVariantId(line.variantId),
         quantity: line.quantity,
+        ...(price ? { accepted: price } : {}),
       };
     });
+  }
+
+  /**
+   * Convierte los `bidId` de la petición en precios, leyéndolos de la base.
+   *
+   * Cada uno se verifica: que la oferta exista, que sea de quien compra, que
+   * sea la que el vendedor aceptó, que la reserva no haya vencido y que la
+   * puja no tenga ya un pedido. Recién entonces su importe entra al pedido.
+   */
+  private async resolveAcceptedPrices(
+    buyerId: UserId,
+    lines: CreateOrderRequest['lines'],
+  ): Promise<{
+    prices: Map<string, AcceptedPrice>;
+    sessions: Map<string, BidSessionId>;
+  }> {
+    const prices = new Map<string, AcceptedPrice>();
+    const sessions = new Map<string, BidSessionId>();
+
+    for (const line of lines) {
+      if (!line.bidId) continue;
+      const { bid, session } = await this.bidService.resolveAcceptedPrice(
+        buyerId,
+        asBidId(line.bidId),
+      );
+
+      if (
+        String(session.productId) !== line.productId ||
+        String(session.variantId) !== line.variantId
+      ) {
+        throw new ConflictException({
+          code: 'BID_NOT_ACTIVE',
+          message: 'Esa oferta es de otro producto.',
+        });
+      }
+
+      prices.set(line.bidId, { unitPriceMinor: bid.amountMinor, bidId: bid.id });
+      sessions.set(line.bidId, session.id);
+    }
+
+    return { prices, sessions };
   }
 }

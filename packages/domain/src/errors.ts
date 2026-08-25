@@ -55,7 +55,26 @@ export type DomainErrorCode =
   /** The submitted commercial details are incomplete. */
   | 'VERIFICATION_DETAILS_INCOMPLETE'
   /** The protection cannot move to that status from where it is. */
-  | 'INVALID_PROTECTION_TRANSITION';
+  | 'INVALID_PROTECTION_TRANSITION'
+  // --- Modo Puja (M04) ---------------------------------------------------
+  /** The bid session cannot move to that status from where it is. */
+  | 'INVALID_BID_SESSION_TRANSITION'
+  /** The session is not taking offers: closed, reserved, sold or expired. */
+  | 'BID_SESSION_NOT_OPEN'
+  /** Below the minimum bid or below the minimum increment. */
+  | 'BID_TOO_LOW'
+  /** Not a positive integer, or out of the safe range. */
+  | 'INVALID_BID_AMOUNT'
+  /** The offer belongs to a different session. */
+  | 'BID_NOT_IN_SESSION'
+  /** The offer was already accepted, expired, or otherwise cannot be used. */
+  | 'BID_NOT_ACTIVE'
+  /** A seller cannot bid on their own session. */
+  | 'CANNOT_BID_ON_OWN_STORE'
+  /** The winner's window to pay has passed. */
+  | 'BID_RESERVATION_EXPIRED'
+  /** The product already has a bid session open in this live. */
+  | 'BID_SESSION_ALREADY_OPEN';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

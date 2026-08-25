@@ -1,16 +1,23 @@
 'use client';
 
-import type { LiveDetailDto, LiveMessageDto, ProductDetailDto } from '@vivo/shared';
+import type {
+  BidSessionDto,
+  LiveDetailDto,
+  LiveMessageDto,
+  ProductDetailDto,
+} from '@vivo/shared';
 import { Avatar, Badge, Button, LiveDot, Sheet, Skeleton, cn } from '@vivo/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeftIcon, EyeIcon, HeartIcon, ShareIcon } from '@/components/icons';
 import { ProductPanel } from '@/components/product-panel';
+import { BidPanel } from './bid-panel';
 import { viewerCredentials } from '@/lib/actions/social';
 import { track } from '@/lib/analytics';
 import { money, viewers } from '@/lib/format';
 import { useViewerStream, type StreamCredentials } from '@/lib/live-media';
 import { useLiveRealtime } from '@/lib/realtime';
+import { useBidSessions } from '@/lib/use-bid-sessions';
 import { VerifiedMark } from '../verified-badge';
 import { FollowButton } from '../follow-button';
 import { LiveChatComposer, LiveChatOverlay } from './live-chat';
@@ -19,6 +26,8 @@ import { VideoStage } from './video-stage';
 interface Props {
   session: LiveDetailDto;
   initialMessages: LiveMessageDto[];
+  /** Las pujas del vivo al abrir, para que la primera pintada no parpadee. */
+  initialBids: BidSessionDto[];
   signedIn: boolean;
   realtimeToken: string | null;
 }
@@ -32,13 +41,22 @@ interface Props {
  * browser toolbar collapsing on scroll, which is what makes most mobile web
  * players feel broken.
  */
-export function LiveViewer({ session: initial, initialMessages, signedIn, realtimeToken }: Props) {
+export function LiveViewer({
+  session: initial,
+  initialMessages,
+  initialBids,
+  signedIn,
+  realtimeToken,
+}: Props) {
   const router = useRouter();
 
   const [session, setSession] = useState(initial);
   const [messages, setMessages] = useState(initialMessages);
   const [viewerCount, setViewerCount] = useState(initial.viewerCount);
   const [likeCount, setLikeCount] = useState(initial.likeCount);
+
+  // Las pujas del vivo: por socket, con reconciliación periódica de fondo.
+  const { sessions: bidSessions, refresh: refreshBids } = useBidSessions(initial.id, initialBids);
 
   const [sheetProduct, setSheetProduct] = useState<ProductDetailDto | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
@@ -71,6 +89,30 @@ export function LiveViewer({ session: initial, initialMessages, signedIn, realti
   }, []);
 
   const featured = session.products.find((product) => product.id === session.featuredProductId);
+  // Una puja a la vez en pantalla: la que está viva, o la que acaba de
+  // terminar para que quien ganó vea que ganó.
+  /**
+   * Una puja a la vez en pantalla.
+   *
+   * Primero la que está viva. Si no hay ninguna, la última que terminó —vendida
+   * o cerrada— porque quien ofertó tiene derecho a saber cómo terminó: que el
+   * panel simplemente desapareciera dejaba a esa persona esperando un resultado
+   * que nunca llegaba. La lista viene ordenada de la más nueva a la más vieja,
+   * así que la primera que coincide es la última que pasó.
+   */
+  const activeBid =
+    bidSessions.find((entry) => entry.status === 'open' || entry.status === 'reserved') ??
+    bidSessions.find((entry) => entry.status === 'sold' || entry.status === 'closed') ??
+    null;
+  /**
+   * Con el producto destacado en puja, la barra de "Comprar" no se muestra.
+   *
+   * No es solo por espacio: ofrecer "Comprar $2.490" al lado de "Hacer una
+   * oferta" sobre el mismo artículo son dos llamados a la acción que se
+   * contradicen, y el que gana por costumbre es el de comprar — justo el que
+   * la persona no quería.
+   */
+  const bidOnFeatured = Boolean(activeBid && featured && activeBid.product.id === featured.id);
   const isLive = session.status === 'live' || session.status === 'interrupted';
   const isOver = session.status === 'ended' || session.status === 'cancelled';
 
@@ -90,6 +132,14 @@ export function LiveViewer({ session: initial, initialMessages, signedIn, realti
       ),
     onReaction: (event) => setLikeCount(event.totalLikes),
     onSale: (event) => setSaleToast(event.productTitle),
+    onBid: (name, event) => {
+      refreshBids();
+      // Solo el cambio de líder merece interrumpir: es la novedad que hace
+      // que alguien vuelva a ofertar. El resto se ve en el panel.
+      if (name === 'leading' && event.bidderName && event.amountMinor !== undefined) {
+        setSaleToast(`🔥 ${event.bidderName} subió a ${money(event.amountMinor, 'UYU')}`);
+      }
+    },
     onState: (event) => {
       setSession((current) => ({
         ...current,
@@ -397,7 +447,20 @@ export function LiveViewer({ session: initial, initialMessages, signedIn, realti
 
         <LiveChatOverlay messages={messages} />
 
-        {featured ? (
+        {/*
+          La puja va en el flujo, no flotando encima.
+
+          Estaba posicionada en absoluto sobre la barra de producto y la tapaba
+          a medias: en un teléfono, tocar "Hacer una oferta" caía sobre
+          "Comprar" y la persona compraba a precio de catálogo en vez de
+          ofertar. Lo destapó el E2E —el click se quedaba esperando un elemento
+          que otro interceptaba— pero el problema era del producto, no del test.
+        */}
+        {activeBid ? (
+          <BidPanel session={activeBid} isSignedIn={signedIn} onRefresh={refreshBids} />
+        ) : null}
+
+        {featured && !bidOnFeatured ? (
           <button
             type="button"
             onClick={() => void openProduct(featured.id)}

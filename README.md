@@ -4,13 +4,18 @@ Plataforma de **live commerce**. Las tiendas transmiten desde el celular y quien
 salir del video. Arranca en Uruguay y está construida para expandirse a Latinoamérica sin
 reescribir el núcleo.
 
-> **Estado: M03 — cobros y confianza.**
+> **Estado: M04 — Modo Puja en Vivo.**
 > El producto se recorre completo de punta a punta. El stock es atómico, la creación de pedidos es
 > transaccional e idempotente, y todo eso está verificado contra PostgreSQL real. El video tiene
 > adaptador real (LiveKit) y los cobros también (Mercado Pago, modelo marketplace), los dos
 > elegibles por configuración. **Ningún cobro real se ejecutó todavía**: el despliegue corre con el
 > proveedor simulado, que implementa el puerto completo. Las notificaciones y el envío siguen
 > simulados detrás de interfaces con la forma final de su integración.
+>
+> Modo Puja: el vendedor pone un producto en puja durante el vivo, la gente
+> oferta, todos ven las mejores ofertas en tiempo real y **el vendedor decide
+> cuál acepta — o ninguna**. No es una subasta: no hay reloj que decida, y el
+> precio de referencia no obliga.
 
 ---
 
@@ -305,6 +310,23 @@ Cómo probarlo, incluido el procedimiento con dos teléfonos:
   que sí es cierto.
 
 Detalle técnico y lo que **no** se verificó: [`docs/m03.md`](docs/m03.md).
+
+### Modo Puja
+
+- **El vendedor mantiene el control.** Acepta la oferta que le sirve, cuando le
+  sirve, o cierra sin vender. Puede aceptar por debajo de la referencia, que es
+  el caso normal: se abre una puja para vender hoy.
+- **Un solo ganador, siempre.** Aceptar corre en una transacción que toma la
+  sesión: dos aceptaciones simultáneas producen un ganador y un error, nunca
+  dos ventas. Probado con carreras reales contra los dos drivers.
+- **El producto queda reservado** cinco minutos para que quien ganó pague por
+  el checkout de siempre. Si no paga, el stock vuelve solo y el vendedor decide
+  si reabre —las otras ofertas siguen en pie— o cierra.
+- **El precio aceptado se congela** en el pedido junto con su origen y la oferta
+  que lo fijó. La comisión de VivoShop se calcula sobre lo que realmente se
+  cobró.
+
+Detalle técnico: [`docs/m04.md`](docs/m04.md).
 
 ## Despliegue
 

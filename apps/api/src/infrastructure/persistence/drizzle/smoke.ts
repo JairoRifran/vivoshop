@@ -179,6 +179,10 @@ async function main(): Promise<void> {
       new UuidGenerator(),
       loadEnv(),
       liveServiceStub(),
+      // El smoke mide la reserva de stock bajo concurrencia real; no toca el
+      // Modo Puja. Un servicio sin construir es mas honesto que armar medio
+      // grafo para nunca llamarlo.
+      undefined as never,
     );
     const checkout = new CheckoutService(
       products,
@@ -189,6 +193,10 @@ async function main(): Promise<void> {
       new UuidGenerator(),
       storeServiceFor(db),
       payments,
+      // El smoke prueba la reserva de stock bajo concurrencia real, que no
+      // pasa por el Modo Puja. Un servicio sin usar es más honesto que
+      // construir medio grafo para no llamarlo.
+      undefined as never,
     );
 
     const BUYER = asUserId('ana');

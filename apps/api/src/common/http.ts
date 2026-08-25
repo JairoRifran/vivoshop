@@ -75,6 +75,34 @@ const DOMAIN_STATUS: Partial<Record<DomainErrorCode, HttpStatus>> = {
   // The provider is down, not the request wrong. 503 tells a client it is
   // worth retrying, which for a seller pressing "Transmitir" it usually is.
   STREAMING_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
+  // --- Cobros y confianza --------------------------------------------------
+  // Un aviso viejo que llega tarde no es una petición mal formada: es un
+  // conflicto con el estado actual.
+  INVALID_PAYMENT_TRANSITION: HttpStatus.CONFLICT,
+  // El vendedor tiene que conectar su cuenta. La petición está bien.
+  SELLER_PAYMENT_ACCOUNT_MISSING: HttpStatus.CONFLICT,
+  SELLER_PAYMENT_ACCOUNT_INVALID: HttpStatus.CONFLICT,
+  PAYMENT_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
+  INVALID_OAUTH_STATE: HttpStatus.BAD_REQUEST,
+  INVALID_VERIFICATION_TRANSITION: HttpStatus.CONFLICT,
+  VERIFICATION_DETAILS_INCOMPLETE: HttpStatus.BAD_REQUEST,
+  INVALID_PROTECTION_TRANSITION: HttpStatus.CONFLICT,
+  // --- Modo Puja -----------------------------------------------------------
+  // Igual que arriba: una puja que se cerró mientras la oferta viajaba es un
+  // conflicto. La misma petición habría funcionado un segundo antes, y un 400
+  // le diría al comprador que se equivocó cuando no fue así.
+  INVALID_BID_SESSION_TRANSITION: HttpStatus.CONFLICT,
+  BID_SESSION_NOT_OPEN: HttpStatus.CONFLICT,
+  BID_SESSION_ALREADY_OPEN: HttpStatus.CONFLICT,
+  BID_NOT_ACTIVE: HttpStatus.CONFLICT,
+  BID_RESERVATION_EXPIRED: HttpStatus.CONFLICT,
+  // Estos sí son la petición: el monto es inválido, o la oferta no pertenece
+  // a esta puja.
+  BID_TOO_LOW: HttpStatus.BAD_REQUEST,
+  INVALID_BID_AMOUNT: HttpStatus.BAD_REQUEST,
+  BID_NOT_IN_SESSION: HttpStatus.BAD_REQUEST,
+  // No es un error de datos: es algo que esta persona no puede hacer.
+  CANNOT_BID_ON_OWN_STORE: HttpStatus.FORBIDDEN,
 };
 
 @Catch()

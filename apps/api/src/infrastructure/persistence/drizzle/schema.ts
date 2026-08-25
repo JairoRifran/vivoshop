@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * PostgreSQL schema.
@@ -275,8 +276,10 @@ export const orderItems = pgTable(
     variantLabelSnapshot: text('variant_label_snapshot').notNull().default(''),
     imageUrlSnapshot: text('image_url_snapshot'),
     unitPriceMinor: integer('unit_price_minor').notNull(),
-    /** De dónde salió el precio: catálogo hoy, oferta aceptada en M04. */
+    /** De dónde salió el precio: catálogo, u oferta aceptada. */
     priceSource: text('price_source').notNull().default('catalog'),
+    /** Qué oferta lo fijó, cuando `price_source` es `accepted_bid`. */
+    bidId: text('bid_id'),
     quantity: integer('quantity').notNull(),
     subtotalMinor: integer('subtotal_minor').notNull(),
     /** Per-line tax snapshot, so a mixed-rate order stays auditable. */
@@ -516,6 +519,104 @@ export const identityVerifications = pgTable(
   (table) => [uniqueIndex('identity_verification_user_idx').on(table.userId)],
 );
 
+// --- Modo Puja (M04) ---------------------------------------------------------
+
+/**
+ * Una puja abierta sobre un producto durante un vivo.
+ *
+ * Tabla propia y no columnas en `live_session_products` porque una puja tiene
+ * ciclo de vida, ganador, reserva y motivo de cierre — y porque un mismo
+ * producto puede pujarse más de una vez en el mismo vivo si el vendedor cierra
+ * y vuelve a abrir. Como fila aparte, cada intento queda registrado.
+ */
+export const bidSessions = pgTable(
+  'bid_sessions',
+  {
+    id: text('id').primaryKey(),
+    liveSessionId: text('live_session_id')
+      .notNull()
+      .references(() => liveSessions.id, { onDelete: 'cascade' }),
+    storeId: text('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    sellerId: text('seller_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    productId: text('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    /** El stock vive en la variante: sin esto no hay nada que reservar. */
+    variantId: text('variant_id').notNull(),
+    status: text('status').notNull().default('open'),
+    currency: text('currency').notNull(),
+    /** Lo que decía la ficha al abrir. Información, no un piso. */
+    referencePriceMinor: integer('reference_price_minor').notNull(),
+    minimumBidMinor: integer('minimum_bid_minor'),
+    minimumIncrementMinor: integer('minimum_increment_minor'),
+    /** La oferta que el vendedor aceptó. Una sola, para siempre. */
+    acceptedBidId: text('accepted_bid_id'),
+    reservedUntil: timestamp('reserved_until', { withTimezone: true }),
+    /** El pedido que salió de la puja. A partir de acá manda el pedido. */
+    orderId: text('order_id').references(() => orders.id, { onDelete: 'set null' }),
+    closedReason: text('closed_reason'),
+    openedAt: timestamp('opened_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('bid_sessions_live_idx').on(table.liveSessionId, table.status),
+    index('bid_sessions_store_idx').on(table.storeId),
+    // El barrido de reservas vencidas pregunta exactamente por esto.
+    index('bid_sessions_reserved_idx').on(table.status, table.reservedUntil),
+    /**
+     * Un producto no puede tener dos pujas abiertas a la vez en el mismo vivo.
+     *
+     * Parcial —solo sobre `open`— para que cerrar y reabrir siga siendo
+     * posible: lo que se prohíbe es que convivan dos abiertas, no que haya
+     * historia. Es la base la que lo impide, no un chequeo previo que dos
+     * peticiones simultáneas podrían pasar las dos.
+     */
+    uniqueIndex('bid_sessions_one_open_per_product_idx')
+      .on(table.liveSessionId, table.productId)
+      .where(sql`status = 'open'`),
+  ],
+);
+
+/**
+ * Una oferta.
+ *
+ * `buyer_name` y `buyer_avatar_url` se congelan acá en vez de leerse del
+ * usuario: la puja es un evento social que se muestra en vivo, y resolver el
+ * nombre de cada postor en cada render sería una consulta por línea. Congelarlo
+ * además hace que la sala vea lo mismo que vio cuando ocurrió.
+ *
+ * Solo se guardan tres estados. `outbid` y `lost` se derivan al leer; ver
+ * `@vivo/domain/entities/bid`.
+ */
+export const bids = pgTable(
+  'bids',
+  {
+    id: text('id').primaryKey(),
+    bidSessionId: text('bid_session_id')
+      .notNull()
+      .references(() => bidSessions.id, { onDelete: 'cascade' }),
+    buyerId: text('buyer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    buyerName: text('buyer_name').notNull(),
+    buyerAvatarUrl: text('buyer_avatar_url'),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: text('currency').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Buscar la mejor oferta de una sesión es la consulta caliente: ocurre en
+    // cada oferta nueva, y bajo el lock de la transacción.
+    index('bids_session_amount_idx').on(table.bidSessionId, table.amountMinor, table.createdAt),
+    index('bids_buyer_idx').on(table.buyerId),
+  ],
+);
+
 /** Reclamo del comprador. Declarado, no mediado: M03 deja el estado. */
 export const disputes = pgTable('disputes', {
   orderId: text('order_id')
@@ -551,6 +652,8 @@ export const schema = {
   businessVerifications,
   identityVerifications,
   disputes,
+  bidSessions,
+  bids,
 };
 
 export type Schema = typeof schema;

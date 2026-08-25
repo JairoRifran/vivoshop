@@ -1,6 +1,13 @@
 import { Global, Injectable, Logger, Module, forwardRef } from '@nestjs/common';
 import {
   REALTIME_EVENTS,
+  type BidAcceptedPayload,
+  type BidClosedPayload,
+  type BidLeadingChangedPayload,
+  type BidOpenedPayload,
+  type BidPlacedPayload,
+  type BidReservationExpiredPayload,
+  type BidSoldPayload,
   type ChatMessagePayload,
   type LiveSessionId,
   type LiveStatePayload,
@@ -82,6 +89,35 @@ export class GatewayRealtimePublisher implements RealtimePublisher {
     this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.saleAnnounced, payload);
   }
 
+  // --- Modo Puja: todo a la sala pública ---
+  async bidOpened(payload: BidOpenedPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidOpened, payload);
+  }
+
+  async bidPlaced(payload: BidPlacedPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidPlaced, payload);
+  }
+
+  async bidLeadingChanged(payload: BidLeadingChangedPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidLeadingChanged, payload);
+  }
+
+  async bidAccepted(payload: BidAcceptedPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidAccepted, payload);
+  }
+
+  async bidClosed(payload: BidClosedPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidClosed, payload);
+  }
+
+  async bidReservationExpired(payload: BidReservationExpiredPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidReservationExpired, payload);
+  }
+
+  async bidSold(payload: BidSoldPayload): Promise<void> {
+    this.safeEmit(payload.liveSessionId, REALTIME_EVENTS.bidSold, payload);
+  }
+
   async roomSize(liveSessionId: LiveSessionId): Promise<number> {
     try {
       return await this.gateway.roomSize(liveSessionId);
@@ -115,6 +151,13 @@ export class NoopRealtimePublisher implements RealtimePublisher {
   async viewerCountChanged(): Promise<void> {}
   async orderCreated(): Promise<void> {}
   async paymentApproved(): Promise<void> {}
+  async bidOpened(): Promise<void> {}
+  async bidPlaced(): Promise<void> {}
+  async bidLeadingChanged(): Promise<void> {}
+  async bidAccepted(): Promise<void> {}
+  async bidClosed(): Promise<void> {}
+  async bidReservationExpired(): Promise<void> {}
+  async bidSold(): Promise<void> {}
   async saleAnnounced(): Promise<void> {}
   async roomSize(): Promise<number> {
     return 0;

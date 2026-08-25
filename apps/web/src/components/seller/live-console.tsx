@@ -1,7 +1,12 @@
 'use client';
 
 import { formatElapsed } from '@vivo/config';
-import type { LiveDetailDto, LiveMessageDto, LiveStatsDto } from '@vivo/shared';
+import type {
+  BidSessionDto,
+  LiveDetailDto,
+  LiveMessageDto,
+  LiveStatsDto,
+} from '@vivo/shared';
 import { Badge, Button, LiveDot, Sheet, cn } from '@vivo/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, useTransition } from 'react';
@@ -15,7 +20,9 @@ import {
   type ConnectionLabel,
   type StreamCredentials,
 } from '@/lib/live-media';
+import { BidConsole } from './bid-console';
 import { useLiveRealtime, type OrderCreatedEvent } from '@/lib/realtime';
+import { useBidSessions } from '@/lib/use-bid-sessions';
 import { broadcastCredentials, endLive, featureProduct, startLive } from '@/lib/actions/seller';
 import { track } from '@/lib/analytics';
 import { money, viewers } from '@/lib/format';
@@ -37,11 +44,13 @@ export function LiveConsole({
   session: initial,
   initialStats,
   initialMessages,
+  initialBids,
   realtimeToken,
 }: {
   session: LiveDetailDto;
   initialStats: LiveStatsDto;
   initialMessages: LiveMessageDto[];
+  initialBids: BidSessionDto[];
   realtimeToken: string | null;
 }) {
   const router = useRouter();
@@ -51,6 +60,8 @@ export function LiveConsole({
   const [messages, setMessages] = useState(initialMessages);
   const [elapsed, setElapsed] = useState(initialStats.elapsedSeconds);
   const [sale, setSale] = useState<string | null>(null);
+  // Acá se decide dinero: además del socket, se reconcilia contra el servidor.
+  const { sessions: bidSessions, refresh: refreshBids } = useBidSessions(initial.id, initialBids);
 
   const [credentials, setCredentials] = useState<StreamCredentials | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -81,6 +92,7 @@ export function LiveConsole({
     onViewerCount: (viewerCount) => setStats((current) => ({ ...current, viewerCount })),
     onMessage: (message) => setMessages((current) => [...current.slice(-80), message]),
     onOrder,
+    onBid: () => refreshBids(),
     onState: (event) => {
       if (!event.status) return;
       setSession((current) => ({
@@ -292,6 +304,16 @@ export function LiveConsole({
           ) : null}
         </DeviceButton>
       </div>
+
+      {/* --- Modo Puja: lo que hay que decidir ahora --------------------------- */}
+      <section className="relative z-10 px-3 pb-2">
+        <BidConsole
+          liveSessionId={initial.id}
+          products={session.products}
+          sessions={bidSessions}
+          onChanged={refreshBids}
+        />
+      </section>
 
       {/* --- Product strip: what the buyer sees ------------------------------- */}
       <section className="relative z-10 flex flex-col gap-2 px-3">

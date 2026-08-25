@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  Bid,
+  BidSession,
   BusinessVerification,
   Dispute,
   Follow,
@@ -64,6 +66,10 @@ export class MemoryDatabase {
   readonly businessVerifications = new Map<string, BusinessVerification>();
   readonly identityVerifications = new Map<string, IdentityVerification>();
   readonly disputes = new Map<string, Dispute>();
+
+  // --- Modo Puja (M04) ------------------------------------------------------
+  readonly bidSessions = new Map<string, BidSession>();
+  readonly bids = new Map<string, Bid>();
 
   private seeded = false;
 
@@ -131,6 +137,8 @@ export class MemoryDatabase {
     this.businessVerifications.clear();
     this.identityVerifications.clear();
     this.disputes.clear();
+    this.bidSessions.clear();
+    this.bids.clear();
     this.seeded = false;
   }
 }

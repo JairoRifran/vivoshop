@@ -1,4 +1,11 @@
 import type {
+  BidAcceptedPayload,
+  BidClosedPayload,
+  BidLeadingChangedPayload,
+  BidOpenedPayload,
+  BidPlacedPayload,
+  BidReservationExpiredPayload,
+  BidSoldPayload,
   ChatMessagePayload,
   LiveSessionId,
   LiveStatePayload,
@@ -44,6 +51,21 @@ export interface RealtimePublisher {
 
   /** Public and anonymised: "alguien compró X". Carries no buyer data. */
   saleAnnounced(payload: SaleAnnouncedPayload): Promise<void>;
+
+  // --- Modo Puja ---
+  /**
+   * Todos públicos: la puja se mira, y ver quién va ganando es la función.
+   *
+   * Ninguno lleva id de usuario ni correo. El ganador se reconoce por `bidId`,
+   * que su propio navegador ya conoce.
+   */
+  bidOpened(payload: BidOpenedPayload): Promise<void>;
+  bidPlaced(payload: BidPlacedPayload): Promise<void>;
+  bidLeadingChanged(payload: BidLeadingChangedPayload): Promise<void>;
+  bidAccepted(payload: BidAcceptedPayload): Promise<void>;
+  bidClosed(payload: BidClosedPayload): Promise<void>;
+  bidReservationExpired(payload: BidReservationExpiredPayload): Promise<void>;
+  bidSold(payload: BidSoldPayload): Promise<void>;
 
   /** Number of sockets currently attached to a session's room. */
   roomSize(liveSessionId: LiveSessionId): Promise<number>;

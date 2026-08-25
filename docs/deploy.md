@@ -349,6 +349,23 @@ apuntando a Supabase:
 pnpm --filter @vivo/api db:migrate
 ```
 
+### Migraciones de M04
+
+`0006_m04_bid_mode` agrega `bid_sessions`, `bids` y `order_items.bid_id`. Es
+aditiva —sin `DROP`, sin `TRUNCATE`— y la aplica el `preDeployCommand` sola. No
+hace falta hacer nada a mano.
+
+Incluye un **índice único parcial**:
+
+```sql
+CREATE UNIQUE INDEX bid_sessions_one_open_per_product_idx
+  ON bid_sessions (live_session_id, product_id) WHERE status = 'open';
+```
+
+Es la base la que impide dos pujas abiertas del mismo producto en un vivo, no
+un chequeo previo que dos peticiones simultáneas podrían pasar las dos. Parcial
+para que cerrar y reabrir siga siendo posible.
+
 ### Qué versión está viva
 
 `/health` publica el commit desplegado:

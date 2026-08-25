@@ -21,6 +21,13 @@ interface Props {
   initialPreview: CheckoutPreviewDto;
   liveSessionId: string | null;
   /**
+   * La oferta aceptada que fija el precio, cuando la compra viene de una puja.
+   *
+   * Solo el id. El monto lo pone el servidor leyendo la oferta; mandarlo desde
+   * acá sería dejar que el navegador elija cuánto paga.
+   */
+  bidId: string | null;
+  /**
    * Una clave por pantalla de checkout, emitida por el servidor.
    *
    * Emitida arriba y no derivada acá a proposito. Derivarla del contenido
@@ -63,6 +70,7 @@ export function CheckoutForm({
   regions,
   initialPreview,
   liveSessionId,
+  bidId,
   idempotencyKey,
 }: Props) {
   const [state, action, submitting] = useActionState(placeOrder, IDLE);
@@ -144,6 +152,7 @@ export function CheckoutForm({
       <input type="hidden" name="requiresAddress" value={String(requiresAddress)} />
       <input type="hidden" name="regionName" value={region?.name ?? ''} />
       <input type="hidden" name="liveSessionId" value={liveSessionId ?? ''} />
+      <input type="hidden" name="bidId" value={bidId ?? ''} />
       <input type="hidden" name="returnTo" value={`/checkout?producto=${product.id}`} />
 
       {state.status === 'error' && state.message ? (

@@ -6,13 +6,27 @@ import { assertDeliveryAddress } from '../entities/order';
 import type { Store } from '../entities/store';
 import { assertStoreCanSell } from '../entities/store';
 import { assertStockAvailable } from './stock';
-import { buildOrderItem, calculateOrderTotals, resolveShippingFee, type OrderTotals } from './pricing';
+import {
+  buildOrderItem,
+  calculateOrderTotals,
+  resolveShippingFee,
+  type AcceptedPrice,
+  type OrderTotals,
+} from './pricing';
 import type { VariantId } from '../value-objects/identifiers';
 
 export interface CheckoutLineRequest {
   readonly product: Product;
   readonly variantId: VariantId;
   readonly quantity: number;
+  /**
+   * Precio fijado por una oferta aceptada, en vez del de catálogo.
+   *
+   * Lo resuelve el servidor leyendo la oferta, **nunca** el cliente: si el
+   * monto viniera en la petición, cualquiera compraría a su propio precio. El
+   * navegador manda un `bidId`; el monto sale de la base.
+   */
+  readonly accepted?: AcceptedPrice;
 }
 
 export interface CheckoutRequest {
@@ -77,8 +91,14 @@ export function buildCheckoutDraft(request: CheckoutRequest): CheckoutDraft {
     return { product: line.product, variant, quantity: line.quantity };
   });
 
-  const items = reservations.map((reservation) =>
-    buildOrderItem(reservation.product, reservation.variant, reservation.quantity, tax),
+  const items = reservations.map((reservation, index) =>
+    buildOrderItem(
+      reservation.product,
+      reservation.variant,
+      reservation.quantity,
+      tax,
+      lines[index]?.accepted,
+    ),
   );
 
   const subtotalMinor = items.reduce((total, item) => total + item.subtotalMinor, 0);

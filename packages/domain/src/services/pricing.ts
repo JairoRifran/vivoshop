@@ -3,26 +3,48 @@ import { DomainError } from '../errors';
 import type { Product, ProductVariant } from '../entities/catalog';
 import { variantLabel, variantPrice } from '../entities/catalog';
 import type { OrderItem } from '../entities/order';
+import type { BidId } from '../value-objects/identifiers';
 import type { StoreSettings } from '../entities/store';
 import { assertPositiveQuantity } from '../value-objects/identifiers';
 import { money } from '../value-objects/money';
 import { isInclusive, resolveTaxRule, summarizeTax, taxForAmount, type TaxSnapshot } from './tax';
 
 /**
+ * Un precio que no sale del catálogo.
+ *
+ * Hoy solo lo produce una oferta aceptada. Es un objeto y no un número suelto
+ * porque el precio y su procedencia tienen que viajar juntos: guardar el monto
+ * sin decir de dónde salió es lo que vuelve inexplicable, meses después, un
+ * pedido de $1.350 sobre un producto de $2.000.
+ */
+export interface AcceptedPrice {
+  readonly unitPriceMinor: number;
+  readonly bidId: BidId;
+}
+
+/**
  * Snapshots a catalog product into an immutable order line, including the tax
  * rule it is charged under. Everything the buyer saw at purchase time — title,
  * variant, image, price and tax — is copied here on purpose.
+ *
+ * `accepted` reemplaza el precio de catálogo cuando la línea sale de una puja.
+ * Todo lo demás —impuestos, subtotal, snapshots— se calcula igual, sobre el
+ * precio que realmente se va a cobrar: el IVA de una oferta aceptada se computa
+ * sobre lo aceptado, no sobre lo que decía la ficha.
  */
 export function buildOrderItem(
   product: Product,
   variant: ProductVariant,
   quantity: number,
   tax: TaxConfig,
+  accepted?: AcceptedPrice,
 ): OrderItem {
   assertPositiveQuantity(quantity);
 
-  const unitPrice = variantPrice(product, variant);
-  const subtotalMinor = unitPrice.amountMinor * quantity;
+  const unitPriceMinor = accepted
+    ? accepted.unitPriceMinor
+    : variantPrice(product, variant).amountMinor;
+  const subtotalMinor = unitPriceMinor * quantity;
   const rule = resolveTaxRule(tax, product);
   const taxAmount = taxForAmount(money(subtotalMinor, product.currency), rule);
 
@@ -32,10 +54,9 @@ export function buildOrderItem(
     titleSnapshot: product.title,
     variantLabelSnapshot: variantLabel(variant),
     imageUrlSnapshot: product.images[0]?.url ?? null,
-    unitPriceMinor: unitPrice.amountMinor,
-    // El catálogo es la única fuente de precio que existe hoy. M04 va a poder
-    // producir `accepted_bid` sin tocar esta función.
-    priceSource: 'catalog',
+    unitPriceMinor,
+    priceSource: accepted ? 'accepted_bid' : 'catalog',
+    bidId: accepted?.bidId ?? null,
     quantity,
     subtotalMinor,
     taxCategory: rule.category,

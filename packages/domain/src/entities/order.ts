@@ -5,6 +5,7 @@ import type { ProtectionStatus } from './protection';
 import type { TaxSnapshot } from '../services/tax';
 import type {
   AddressId,
+  BidId,
   LiveSessionId,
   OrderId,
   ProductId,
@@ -172,6 +173,15 @@ export interface OrderItem {
    * pedido viejo tiene un número que no coincide con el catálogo.
    */
   readonly priceSource: PriceSource;
+  /**
+   * La oferta que fijó este precio, cuando `priceSource` es `accepted_bid`.
+   *
+   * Es la trazabilidad de por qué esta línea costó lo que costó. Sin esto, un
+   * pedido de $1.350 sobre un producto de catálogo de $2.000 sería
+   * inexplicable seis meses después, y "el vendedor aceptó esa oferta" es
+   * precisamente lo que hay que poder demostrar.
+   */
+  readonly bidId: BidId | null;
   readonly quantity: number;
   readonly subtotalMinor: number;
   /**

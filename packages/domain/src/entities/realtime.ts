@@ -29,6 +29,13 @@ export const REALTIME_EVENTS = {
   orderCreated: 'order.created',
   paymentApproved: 'payment.approved',
   saleAnnounced: 'sale.announced',
+  bidOpened: 'bid.opened',
+  bidPlaced: 'bid.placed',
+  bidLeadingChanged: 'bid.leading_changed',
+  bidAccepted: 'bid.accepted',
+  bidClosed: 'bid.closed',
+  bidReservationExpired: 'bid.reservation_expired',
+  bidSold: 'bid.sold',
 } as const;
 
 export type RealtimeEventName = (typeof REALTIME_EVENTS)[keyof typeof REALTIME_EVENTS];
@@ -126,6 +133,71 @@ export interface SaleAnnouncedPayload {
   readonly productTitle: string;
 }
 
+/**
+ * Modo Puja: lo que la sala ve.
+ *
+ * Todos estos eventos son **públicos**: la puja es un evento social y su valor
+ * está justamente en que se vea quién va ganando. Lo que sí se cuida es que no
+ * viaje nada que no haga falta para mirar — nombre público y monto, sí; correo,
+ * id de usuario y datos de contacto, nunca.
+ *
+ * El ganador reconoce que ganó por `bidId`, no por su id de usuario: su propio
+ * navegador sabe qué ofertas hizo porque las respuestas se lo dijeron. Así, un
+ * evento que ve toda la sala no tiene que llevar la identidad interna de nadie.
+ */
+export interface BidOpenedPayload {
+  readonly liveSessionId: string;
+  readonly bidSessionId: string;
+  readonly productId: string;
+  readonly productTitle: string;
+  readonly productImageUrl: string | null;
+  readonly currency: string;
+  /** Lo que decía la ficha. Información, no un piso. */
+  readonly referencePriceMinor: number;
+  readonly minimumBidMinor: number | null;
+  readonly minimumIncrementMinor: number | null;
+}
+
+export interface BidPlacedPayload {
+  readonly liveSessionId: string;
+  readonly bidSessionId: string;
+  readonly bidId: string;
+  readonly bidderName: string;
+  readonly bidderAvatarUrl: string | null;
+  readonly amountMinor: number;
+  readonly currency: string;
+}
+
+/** Cambió quién va ganando. Lleva el próximo mínimo, que es lo accionable. */
+export interface BidLeadingChangedPayload extends BidPlacedPayload {
+  readonly nextMinimumMinor: number;
+}
+
+export interface BidAcceptedPayload extends BidPlacedPayload {
+  /** Hasta cuándo tiene el ganador para pagar. */
+  readonly reservedUntil: string | null;
+}
+
+export interface BidClosedPayload {
+  readonly liveSessionId: string;
+  readonly bidSessionId: string;
+  readonly reason: string;
+  readonly sold: boolean;
+}
+
+export interface BidReservationExpiredPayload {
+  readonly liveSessionId: string;
+  readonly bidSessionId: string;
+}
+
+export interface BidSoldPayload {
+  readonly liveSessionId: string;
+  readonly bidSessionId: string;
+  readonly bidderName: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+}
+
 export interface RealtimeEventMap {
   'live.state': LiveStatePayload;
   'viewer.count': ViewerCountPayload;
@@ -135,6 +207,13 @@ export interface RealtimeEventMap {
   'order.created': OrderCreatedPayload;
   'payment.approved': PaymentApprovedPayload;
   'sale.announced': SaleAnnouncedPayload;
+  'bid.opened': BidOpenedPayload;
+  'bid.placed': BidPlacedPayload;
+  'bid.leading_changed': BidLeadingChangedPayload;
+  'bid.accepted': BidAcceptedPayload;
+  'bid.closed': BidClosedPayload;
+  'bid.reservation_expired': BidReservationExpiredPayload;
+  'bid.sold': BidSoldPayload;
 }
 
 /** Identifies who is on the socket, without trusting the browser for it. */

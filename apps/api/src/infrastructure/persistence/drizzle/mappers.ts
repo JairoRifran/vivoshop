@@ -23,6 +23,7 @@ import type {
   UserStatus,
 } from '@vivo/domain';
 import {
+  asBidId,
   asLiveSessionId,
   asMessageId,
   asOrderId,
@@ -311,6 +312,7 @@ export function toOrder(row: OrderRow, itemRows: OrderItemRow[]): Order {
       imageUrlSnapshot: item.imageUrlSnapshot,
       unitPriceMinor: item.unitPriceMinor,
       priceSource: item.priceSource as OrderItem['priceSource'],
+      bidId: item.bidId ? asBidId(item.bidId) : null,
       quantity: item.quantity,
       subtotalMinor: item.subtotalMinor,
       taxCategory: item.taxCategory,
@@ -402,6 +404,7 @@ export function fromOrderItems(order: Order) {
     imageUrlSnapshot: item.imageUrlSnapshot,
     unitPriceMinor: item.unitPriceMinor,
     priceSource: item.priceSource,
+    bidId: item.bidId ? String(item.bidId) : null,
     quantity: item.quantity,
     subtotalMinor: item.subtotalMinor,
     taxCategory: item.taxCategory,

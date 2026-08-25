@@ -1,4 +1,6 @@
 import {
+  BID_OUTCOMES,
+  BID_SESSION_STATUSES,
   DISPUTE_REASONS,
   DISPUTE_STATUSES,
   LIVE_STATUSES,
@@ -429,3 +431,55 @@ export const disputeSchema = z.object({
   resolvedAt: isoDateSchema.nullable(),
 });
 export type DisputeDto = z.infer<typeof disputeSchema>;
+
+// --- Modo Puja (M04) ------------------------------------------------------------
+
+/**
+ * Una oferta, como la ve cualquiera.
+ *
+ * Nombre público y monto. Sin id de usuario, sin correo: la puja se muestra en
+ * vivo a toda la sala, y lo único que la sala necesita saber es quién va
+ * ganando y por cuánto.
+ */
+export const bidSchema = z.object({
+  id: idSchema,
+  bidderName: z.string(),
+  bidderAvatarUrl: z.string().nullable(),
+  amountMinor: minorAmountSchema,
+  currency: currencySchema,
+  outcome: z.enum(BID_OUTCOMES),
+  createdAt: isoDateSchema,
+});
+export type BidDto = z.infer<typeof bidSchema>;
+
+export const bidSessionSchema = z.object({
+  id: idSchema,
+  liveSessionId: idSchema,
+  status: z.enum(BID_SESSION_STATUSES),
+  product: productSummarySchema,
+  /** La unidad concreta que se puja. El stock vive en la variante. */
+  variantId: idSchema,
+  currency: currencySchema,
+  /** Lo que decía la ficha al abrir. No obliga al vendedor a aceptar. */
+  referencePriceMinor: minorAmountSchema,
+  minimumBidMinor: minorAmountSchema.nullable(),
+  minimumIncrementMinor: minorAmountSchema.nullable(),
+  /** La mejor oferta vigente. Null mientras nadie ofertó. */
+  leadingBid: bidSchema.nullable(),
+  /** El mínimo que la sesión acepta ahora mismo, ya calculado. */
+  nextMinimumMinor: minorAmountSchema,
+  bids: z.array(bidSchema),
+  /** Segundos que le quedan al ganador para pagar. Cero fuera de la reserva. */
+  reservationSecondsLeft: z.number().int(),
+  /**
+   * La oferta de quien está mirando, cuando hay sesión iniciada.
+   *
+   * Es lo que le permite al ganador reconocerse tras recargar la página sin
+   * que ningún evento público lleve identidades.
+   */
+  viewerBid: bidSchema.nullable().optional(),
+  /** Presente solo para el ganador: a dónde ir a pagar. */
+  checkoutUrl: z.string().nullable().optional(),
+  openedAt: isoDateSchema,
+});
+export type BidSessionDto = z.infer<typeof bidSessionSchema>;

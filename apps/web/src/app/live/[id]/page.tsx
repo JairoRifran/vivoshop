@@ -65,8 +65,11 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
     throw error;
   }
 
-  const [messages, user, socketToken] = await Promise.all([
+  const [messages, bids, user, socketToken] = await Promise.all([
     safe(client.live.messages(id, { limit: 40 }), []),
+    // Las pujas entran en la primera pintada: si se pidieran después, quien
+    // abre el vivo durante una puja vería medio segundo sin ella.
+    safe(client.bids.forLive(id), []),
     getCurrentUser(),
     // Minted server-side: the session cookie stays httpOnly, and this token is
     // only accepted by the realtime gateway.
@@ -77,6 +80,7 @@ export default async function LivePage({ params }: { params: Promise<{ id: strin
     <LiveViewer
       session={session}
       initialMessages={messages}
+      initialBids={bids}
       signedIn={Boolean(user)}
       realtimeToken={socketToken}
     />

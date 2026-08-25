@@ -18,6 +18,8 @@ export type MessageId = Brand<string, 'MessageId'>;
 export type AddressId = Brand<string, 'AddressId'>;
 export type PaymentId = Brand<string, 'PaymentId'>;
 export type VerificationId = Brand<string, 'VerificationId'>;
+export type BidSessionId = Brand<string, 'BidSessionId'>;
+export type BidId = Brand<string, 'BidId'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asStoreId = (value: string): StoreId => value as StoreId;
@@ -29,6 +31,8 @@ export const asMessageId = (value: string): MessageId => value as MessageId;
 export const asAddressId = (value: string): AddressId => value as AddressId;
 export const asPaymentId = (value: string): PaymentId => value as PaymentId;
 export const asVerificationId = (value: string): VerificationId => value as VerificationId;
+export const asBidSessionId = (value: string): BidSessionId => value as BidSessionId;
+export const asBidId = (value: string): BidId => value as BidId;
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

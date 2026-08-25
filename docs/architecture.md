@@ -79,6 +79,13 @@ producción al lado del simulado.
 | `CacheStore` / `PresenceStore` | `Memory*` | `Redis*` (ya escritos) |
 | Repositorios | `Memory*` | `Drizzle*` (ya escritos) |
 
+Tres transacciones acotadas, no una unidad de trabajo genérica: `OrderTransaction`
+(crear un pedido), `PaymentTransaction` (aplicar un aviso de cobro) y
+`BidTransaction` (ofertar y aceptar). Cada una expone exactamente las
+operaciones que tienen que ocurrir juntas y ninguna más — una genérica tentaría
+a cada caso de uso a abrir una transacción, y la que importa acá es siempre
+pequeña y con un lock adentro.
+
 Los dos se eligen por configuración (`STREAMING_PROVIDER=mock|livekit`,
 `PAYMENT_PROVIDER=fake|mercadopago`), no por build: el clon nuevo y toda la suite de pruebas corren
 en los simulados, sin cuenta, sin Docker y sin credenciales.

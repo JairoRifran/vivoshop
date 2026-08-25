@@ -5,6 +5,7 @@ import type { Order, OrderId, Product, ProductId, StoreId } from '@vivo/domain';
 import { asProductId, asStoreId, asUserId } from '@vivo/domain';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
+import { BidService } from '../../../application/services/bid.service';
 import { CheckoutService } from '../../../application/services/checkout.service';
 import type { LiveService } from '../../../application/services/live.service';
 import { PaymentService } from '../../../application/services/payment.service';
@@ -21,6 +22,10 @@ import type {
   PaymentTransactionRunner,
   SellerPaymentAccountRepository,
 } from '../../../application/ports/payments';
+import type { BidRepository, BidTransactionRunner } from '../../../application/ports/bids';
+import { MemoryCacheStore } from '../../cache/memory-cache';
+import { DrizzleBidRepository, DrizzleBidTransactionRunner } from '../drizzle/drizzle.bids';
+import { MemoryBidRepository, MemoryBidTransactionRunner } from '../memory/memory.bids';
 import { FakePaymentProvider } from '../../providers/fake-payment.provider';
 import { loadEnv } from '../../../config/env';
 import { PasswordService } from '../../security/password.service';
@@ -104,6 +109,9 @@ export interface DriverHarness {
   readonly payments: PaymentService;
   /** El proveedor simulado detras de `payments`, para decidir desenlaces. */
   readonly provider: FakePaymentProvider;
+  /** El Modo Puja del mismo driver, para probar concurrencia con paridad. */
+  readonly bids: BidService;
+  readonly bidRepo: BidRepository;
   /** Test-only failure injection; see `FaultInjectingRunner`. */
   readonly faults: FaultInjectingRunner;
   readonly products: ProductRepository;
@@ -123,6 +131,9 @@ export const PRODUCT = 'campera-roma';
 export const VARIANT = 'campera-roma-v1';
 export const OTHER_PRODUCT = 'pantalon-cordon';
 export const OTHER_VARIANT = 'pantalon-cordon-v1';
+/** Dueña de `plaza-moda` en el dataset de demo. */
+export const SELLER = 'martina';
+export const SELLER_LIVE = 'live-plaza-otono';
 
 const NOW = new Date('2026-03-01T20:00:00.000Z');
 
@@ -131,10 +142,33 @@ const NOW = new Date('2026-03-01T20:00:00.000Z');
  * paths; order creation reads the store inside the transaction. A narrow stub
  * keeps the harness from having to construct half the application graph.
  */
-function storeServiceStub(load: (id: StoreId) => Promise<unknown>): StoreService {
+function storeServiceStub(
+  load: (id: StoreId) => Promise<unknown>,
+  owned?: () => Promise<unknown>,
+): StoreService {
   return {
     requireById: async (id: StoreId) => load(id),
+    requireOwned: async () => (owned ? owned() : load(STORE)),
   } as unknown as StoreService;
+}
+
+/**
+ * El vivo, reducido a lo que el Modo Puja le pregunta.
+ *
+ * `SELLER_LIVE` está siempre al aire y le pertenece a `SELLER`. Basta para
+ * ejercitar la puja sin arrastrar el gateway de WebRTC a un test de
+ * persistencia — y si alguna vez la puja empezara a depender de algo más del
+ * vivo, este stub lo haría fallar en vez de dejarlo pasar en silencio.
+ */
+function bidLiveStub(): LiveService {
+  return {
+    ...liveServiceStub(),
+    findSession: async (id: unknown) =>
+      String(id) === SELLER_LIVE
+        ? { id: SELLER_LIVE, status: 'live', storeId: STORE }
+        : null,
+    isBroadcasterFor: async (_session: unknown, userId: unknown) => String(userId) === SELLER,
+  } as unknown as LiveService;
 }
 
 /**
@@ -155,8 +189,38 @@ function buildServices(input: {
   accounts: SellerPaymentAccountRepository;
   oauthStates: OAuthStateRepository;
   paymentRunner: PaymentTransactionRunner;
-}): { checkout: CheckoutService; payments: PaymentService; provider: FakePaymentProvider } {
+  bidRepo: BidRepository;
+  bidRunner: BidTransactionRunner;
+}): {
+  checkout: CheckoutService;
+  payments: PaymentService;
+  provider: FakePaymentProvider;
+  bids: BidService;
+} {
   const provider = new FakePaymentProvider(new UuidGenerator());
+  const testEnv = loadEnv({
+    ...process.env,
+    NODE_ENV: 'test',
+    DATA_DRIVER: 'memory',
+    DATABASE_URL: undefined,
+  });
+
+  // El Modo Puja se arma primero: los cobros lo necesitan para cerrar una puja
+  // cuando el pago se aprueba, y la dependencia va en un solo sentido.
+  const bids = new BidService(
+    input.bidRepo,
+    input.bidRunner,
+    input.products,
+    input.users,
+    new NoopRealtimePublisher(),
+    new MemoryCacheStore(),
+    new SystemClock(),
+    new UuidGenerator(),
+    testEnv,
+    input.stores,
+    bidLiveStub(),
+  );
+
   const payments = new PaymentService(
     provider,
     input.paymentRepo,
@@ -167,8 +231,9 @@ function buildServices(input: {
     new NoopRealtimePublisher(),
     new SystemClock(),
     new UuidGenerator(),
-    loadEnv({ ...process.env, NODE_ENV: 'test', DATA_DRIVER: 'memory', DATABASE_URL: undefined }),
+    testEnv,
     liveServiceStub(),
+    bids,
   );
 
   const checkout = new CheckoutService(
@@ -180,9 +245,10 @@ function buildServices(input: {
     new UuidGenerator(),
     input.stores,
     payments,
+    bids,
   );
 
-  return { checkout, payments, provider };
+  return { checkout, payments, provider, bids };
 }
 
 // --- Memory ------------------------------------------------------------------
@@ -205,6 +271,8 @@ export async function createMemoryHarness(): Promise<DriverHarness> {
     accounts: new MemorySellerPaymentAccountRepository(db),
     oauthStates: new MemoryOAuthStateRepository(db),
     paymentRunner: new MemoryPaymentTransactionRunner(db),
+    bidRepo: new MemoryBidRepository(db),
+    bidRunner: new MemoryBidTransactionRunner(db),
   });
 
   return {
@@ -212,6 +280,8 @@ export async function createMemoryHarness(): Promise<DriverHarness> {
     checkout: services.checkout,
     payments: services.payments,
     provider: services.provider,
+    bids: services.bids,
+    bidRepo: new MemoryBidRepository(db),
     faults,
     products,
     orders,
@@ -287,6 +357,8 @@ export async function createPgliteHarness(): Promise<DriverHarness> {
     accounts: new DrizzleSellerPaymentAccountRepository(db),
     oauthStates: new DrizzleOAuthStateRepository(db),
     paymentRunner: new DrizzlePaymentTransactionRunner(db),
+    bidRepo: new DrizzleBidRepository(db),
+    bidRunner: new DrizzleBidTransactionRunner(db),
   });
 
   return {
@@ -294,6 +366,8 @@ export async function createPgliteHarness(): Promise<DriverHarness> {
     checkout: services.checkout,
     payments: services.payments,
     provider: services.provider,
+    bids: services.bids,
+    bidRepo: new DrizzleBidRepository(db),
     faults,
     products,
     orders,

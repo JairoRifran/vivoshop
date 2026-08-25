@@ -23,6 +23,10 @@ User ──owns──► Store ──has──► Product ──has──► Pro
                 │
                 └──paid by──► Payment ──splits──► PaymentSplit (comisión congelada)
 
+LiveSession ──may host──► BidSession ──receives──► Bid  (Modo Puja)
+                              │
+                              └──accepts one──► Bid ──fija el precio──► OrderItem
+
 Store ──may have──► BusinessVerification  (otorga el ✓; opcional)
 User  ──may have──► IdentityVerification  (no otorga tick; opcional)
 Store ──may have──► SellerPaymentAccount  (con qué cobra; una por proveedor)
@@ -243,6 +247,12 @@ Funciones puras, sin I/O.
 | `protectionLevel` / `canPromiseProtection` | La UI promete exactamente lo que el proveedor sostiene |
 | `shouldAttemptRelease` | Completar el pedido **habilita** liberar; no libera |
 | `assertBusinessReviewable` | El ✓ exige datos del negocio, no la cédula de quien atiende |
+| `assertBidAcceptable` | Moneda, monto, mínimo e incremento, en un solo lugar |
+| `nextMinimumBid` | El mínimo que se muestra es el mismo que valida |
+| `leadingBid` | La más alta; ante empate, la primera |
+| `withOutcomes` | Deriva superada/perdida en vez de escribirlas |
+| `assertCanAccept` | Sesión abierta, oferta viva y de esta sesión |
+| `isReservationExpired` | Con pedido creado, el reloj de la puja deja de mandar |
 
 `buildCheckoutDraft` acepta `enforceAddress: false` para que el checkout web pueda mostrar el
 precio antes de que el comprador escriba su dirección — bloquear el precio hasta entonces hace que
@@ -264,12 +274,16 @@ El transporte mapea el código a un status HTTP; el cliente lo mapea a una frase
 
 ## Qué está probado
 
-161 tests unitarios cubren: aritmética de dinero y rechazo de mezcla de monedas, extracción de IVA
+195 tests unitarios cubren: aritmética de dinero y rechazo de mezcla de monedas, extracción de IVA
 incluido, resolución de reglas fiscales por categoría con mercados incluidos/aditivos/exentos,
 pedidos de tasa mixta, formato de claves de idempotencia y estabilidad de la huella, ambas máquinas
 de estado con sus transiciones ilegales, precios de checkout con envío, retiro y descuentos, reserva
 y liberación de stock, sobreventa, tiendas pausadas, productos no publicados, y la consistencia del
 dataset de demostración.
+
+Desde M04, también: la matriz completa de transiciones de una puja —incluido
+que **ninguna** se dispara sola—, que el precio de referencia no es un piso, que
+el dueño no puede ofertar en su propia tienda, y el desempate por antigüedad.
 
 Desde M03, también: las seis transiciones del pago y las que están prohibidas, el reparto de la
 comisión con su redondeo a favor del vendedor, los cuatro ejes de la Compra Protegida —incluida la
@@ -279,4 +293,6 @@ proveedor soporta, y que el ✓ no se puede otorgar sin identificador tributario
 Encima de eso, los tests de contrato ejercitan **de forma idéntica contra los dos drivers de
 persistencia** la creación de pedidos —stock atómico, concurrencia, idempotencia y rollback, ver
 [`m01.1.md`](m01.1.md)— y el ciclo de cobro completo —webhook idempotente, avisos simultáneos,
-aviso rancio y devolución de stock, ver [`m03.md`](m03.md)—.
+aviso rancio y devolución de stock, ver [`m03.md`](m03.md)— y el Modo Puja
+—dos aceptaciones simultáneas con un solo ganador, reserva de stock y precio
+congelado, ver [`m04.md`](m04.md)—.

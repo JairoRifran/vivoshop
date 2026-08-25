@@ -16,6 +16,14 @@ interface SearchParams {
   variante?: string;
   cantidad?: string;
   vivo?: string;
+  /**
+   * La oferta aceptada que trae a esta persona acá.
+   *
+   * Viaja el id y nunca el monto: el precio lo resuelve el servidor leyendo la
+   * oferta. Si el monto viniera en la URL, cualquiera compraría al precio que
+   * escribiera en la barra de direcciones.
+   */
+  oferta?: string;
 }
 
 export default async function CheckoutPage({
@@ -23,12 +31,12 @@ export default async function CheckoutPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { producto, variante, cantidad, vivo } = await searchParams;
+  const { producto, variante, cantidad, vivo, oferta } = await searchParams;
   if (!producto || !variante) notFound();
 
-  const self = `/checkout?producto=${producto}&variante=${variante}&cantidad=${cantidad ?? 1}${
-    vivo ? `&vivo=${vivo}` : ''
-  }`;
+  const self =
+    `/checkout?producto=${producto}&variante=${variante}&cantidad=${cantidad ?? 1}` +
+    `${vivo ? `&vivo=${vivo}` : ''}${oferta ? `&oferta=${oferta}` : ''}`;
 
   const user = await getCurrentUser();
   if (!user) redirect(`/ingresar?next=${encodeURIComponent(self)}`);
@@ -53,8 +61,22 @@ export default async function CheckoutPage({
 
   if (!firstDelivery) notFound();
 
+  /**
+   * Con una oferta aceptada, la vista previa se pide con su id.
+   *
+   * El servidor la lee, verifica que sea de quien está comprando y usa su
+   * importe. Así el número que se ve acá sale del mismo lugar que el que se va
+   * a cobrar, en vez de ser una segunda cuenta que puede diferir.
+   */
+  const line = {
+    productId: product.id,
+    variantId: variante,
+    quantity,
+    ...(oferta ? { bidId: oferta } : {}),
+  };
+
   const preview = await client.orders.preview(store.id, {
-    lines: [{ productId: product.id, variantId: variante, quantity }],
+    lines: [line],
     deliveryMethodId: firstDelivery.id,
     installments: 1,
   });
@@ -84,6 +106,7 @@ export default async function CheckoutPage({
           regions={[...market.address.regions]}
           initialPreview={preview}
           liveSessionId={vivo ?? null}
+          bidId={oferta ?? null}
           /* Una por carga de pantalla: los reintentos de *este* checkout la
              comparten, y abrir el checkout de nuevo empieza de cero. */
           idempotencyKey={`chk-${randomUUID()}`}

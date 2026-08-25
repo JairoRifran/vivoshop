@@ -43,6 +43,13 @@
       "when": 1787592204929,
       "tag": "0005_m03_verification_and_protection",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787618240523,
+      "tag": "0006_m04_bid_mode",
+      "breakpoints": true
     }
   ]
 }

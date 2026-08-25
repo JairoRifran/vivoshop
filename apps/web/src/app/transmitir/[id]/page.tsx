@@ -24,9 +24,10 @@ export default async function LiveConsolePage({ params }: { params: Promise<{ id
     throw error;
   }
 
-  const [stats, messages, socketToken] = await Promise.all([
+  const [stats, messages, bids, socketToken] = await Promise.all([
     client.live.stats(id),
     safe(client.live.messages(id, { limit: 50 }), []),
+    safe(client.bids.forLive(id), []),
     realtimeToken(),
   ]);
 
@@ -35,6 +36,7 @@ export default async function LiveConsolePage({ params }: { params: Promise<{ id
       session={session}
       initialStats={stats}
       initialMessages={messages}
+      initialBids={bids}
       realtimeToken={socketToken}
     />
   );

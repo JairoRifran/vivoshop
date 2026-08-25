@@ -43,6 +43,7 @@ import {
 import type { RealtimePublisher } from '../ports/realtime';
 import type { UserRepository } from '../ports/repositories';
 import { CLOCK, ID_GENERATOR, REALTIME_PUBLISHER, USER_REPOSITORY } from '../ports/tokens';
+import { BidService } from './bid.service';
 import { LiveService } from './live.service';
 
 /**
@@ -79,6 +80,7 @@ export class PaymentService {
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     @Inject(ENV) private readonly env: AppEnv,
     private readonly liveService: LiveService,
+    private readonly bids: BidService,
   ) {}
 
   /** Lo que la UI puede prometer. Ni una palabra más. */
@@ -221,7 +223,14 @@ export class PaymentService {
       });
     });
 
-    if (outcome?.announce) await this.announceApproved(outcome.order, outcome.payment);
+    if (outcome?.announce) {
+      await this.announceApproved(outcome.order, outcome.payment);
+      // Si el pedido salió de una puja, la puja terminó en venta. No lanza
+      // cuando no salió de una: la mayoría de los pagos son checkout normal.
+      if (outcome.order) {
+        await this.bids.markSold(outcome.order.id).catch(() => undefined);
+      }
+    }
   }
 
   private async applyInsideTransaction(

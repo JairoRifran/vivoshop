@@ -11,6 +11,7 @@ import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { AuthController } from './modules/auth.controller';
 import { ProductsController, StoresController } from './modules/catalog.controller';
 import { LiveController } from './modules/live.controller';
+import { BidsController, SellerBidsController } from './modules/bids.controller';
 import { CheckoutController, OrdersController } from './modules/orders.controller';
 import {
   PaymentsController,
@@ -56,6 +57,8 @@ import { SystemController } from './modules/system.controller';
     PaymentsController,
     SellerPaymentsController,
     VerificationController,
+    BidsController,
+    SellerBidsController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ApiExceptionFilter },

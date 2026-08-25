@@ -1,5 +1,6 @@
 import {
   DISPUTE_REASONS,
+  MAX_BID_MINOR,
   ORDER_STATUSES,
   PRODUCT_STATUSES,
   STORE_CATEGORIES,
@@ -143,6 +144,15 @@ export const checkoutLineSchema = z.object({
   productId: idSchema,
   variantId: idSchema,
   quantity: quantitySchema,
+  /**
+   * La oferta aceptada que fija el precio de esta línea.
+   *
+   * Viaja el **id**, nunca el monto. Si el monto viniera del navegador,
+   * cualquiera compraría al precio que escribiera; el servidor lee la oferta,
+   * verifica que sea la aceptada, que sea de quien está comprando y que la
+   * reserva siga viva, y recién ahí usa su importe.
+   */
+  bidId: idSchema.optional(),
 });
 
 export const checkoutPreviewRequestSchema = z.object({
@@ -239,3 +249,40 @@ export const openDisputeRequestSchema = z.object({
   detail: z.string().trim().max(600).default(''),
 });
 export type OpenDisputeRequest = z.infer<typeof openDisputeRequestSchema>;
+
+// --- Modo Puja (M04) ------------------------------------------------------------
+
+/**
+ * Abrir una puja.
+ *
+ * El precio de referencia **no** viene acá: lo congela el servidor desde el
+ * catálogo. Dejar que el navegador proponga cuánto "vale" el producto sería
+ * dejarlo inventar el número que después se le muestra a cada persona que
+ * oferta.
+ */
+export const openBidSessionRequestSchema = z.object({
+  liveSessionId: idSchema,
+  productId: idSchema,
+  /** Sin esto se usa la primera variante con stock. */
+  variantId: idSchema.optional(),
+  minimumBidMinor: minorAmountSchema.max(MAX_BID_MINOR).nullable().default(null),
+  minimumIncrementMinor: minorAmountSchema.max(MAX_BID_MINOR).nullable().default(null),
+});
+export type OpenBidSessionRequest = z.infer<typeof openBidSessionRequestSchema>;
+
+/**
+ * Una oferta. Un entero positivo y nada más.
+ *
+ * El tope se valida acá **y** en el dominio: acá para devolver un 400 legible,
+ * y allá porque la regla no puede depender de que alguien haya pasado por esta
+ * ruta.
+ */
+export const submitBidRequestSchema = z.object({
+  amountMinor: z.number().int().positive().max(MAX_BID_MINOR),
+});
+export type SubmitBidRequest = z.infer<typeof submitBidRequestSchema>;
+
+export const acceptBidRequestSchema = z.object({
+  bidId: idSchema,
+});
+export type AcceptBidRequest = z.infer<typeof acceptBidRequestSchema>;

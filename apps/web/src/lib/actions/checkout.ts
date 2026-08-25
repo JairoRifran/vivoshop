@@ -83,6 +83,8 @@ export async function placeOrder(_previous: ActionState, form: FormData): Promis
             productId: text(form, 'productId'),
             variantId: text(form, 'variantId'),
             quantity: number(form, 'quantity', 1),
+            // Solo el id de la oferta. El precio lo resuelve el servidor.
+            ...(optionalText(form, 'bidId') ? { bidId: text(form, 'bidId') } : {}),
           },
         ],
         deliveryMethodId,

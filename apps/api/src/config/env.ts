@@ -122,6 +122,16 @@ const envSchema = z.object({
   MERCADOPAGO_WEBHOOK_SECRET: z.string().optional(),
   /** Base publica de la API, para armar el callback de OAuth y el webhook. */
   API_PUBLIC_URL: z.string().default('http://localhost:4000'),
+
+  // --- Modo Puja (M04) --------------------------------------------------
+  /**
+   * Cuanto tiene el ganador de una puja para pagar.
+   *
+   * Vive aca y en `DEFAULT_BID_RESERVATION_SECONDS` del dominio, y en ningun
+   * otro lado: es de los valores que se ajustan con datos reales, y buscarlo
+   * repartido por el codigo seria el problema.
+   */
+  BID_RESERVATION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;

@@ -20,7 +20,12 @@ import { OrderService } from '../application/services/order.service';
 import { PaymentService } from '../application/services/payment.service';
 import { ProtectionService } from '../application/services/protection.service';
 import { StoreService } from '../application/services/store.service';
-import { Public, requireUser, type AuthenticatedUser } from '../common/auth.guard';
+import {
+  OptionalAuth,
+  Public,
+  requireUser,
+  type AuthenticatedUser,
+} from '../common/auth.guard';
 import { CurrentUser, zodPipe } from '../common/http';
 
 @Controller('checkout')
@@ -32,12 +37,14 @@ export class CheckoutController {
    * placing the order requires an account.
    */
   @Public()
+  @OptionalAuth()
   @Post(':storeId/preview')
   preview(
+    @CurrentUser() user: AuthenticatedUser | null,
     @Param('storeId') storeId: string,
     @Body(zodPipe(checkoutPreviewRequestSchema)) body: CheckoutPreviewRequest,
   ): Promise<CheckoutPreviewDto> {
-    return this.checkout.preview(asStoreId(storeId), body);
+    return this.checkout.preview(asStoreId(storeId), body, user?.id ?? null);
   }
 
   /**

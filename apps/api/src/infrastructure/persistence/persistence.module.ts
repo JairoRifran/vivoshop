@@ -20,6 +20,7 @@ import {
   STORE_REPOSITORY,
   USER_REPOSITORY,
 } from '../../application/ports/tokens';
+import { BID_REPOSITORY, BID_TRANSACTION_RUNNER } from '../../application/ports/bids';
 import {
   DISPUTE_REPOSITORY,
   OAUTH_STATE_REPOSITORY,
@@ -31,6 +32,8 @@ import {
 import { PasswordService } from '../security/password.service';
 import { DRIZZLE, createDatabase } from './drizzle/client';
 import { DrizzleOrderTransactionRunner } from './drizzle/drizzle.order-transaction';
+import { DrizzleBidRepository, DrizzleBidTransactionRunner } from './drizzle/drizzle.bids';
+import { MemoryBidRepository, MemoryBidTransactionRunner } from './memory/memory.bids';
 import {
   DrizzleDisputeRepository,
   DrizzleOAuthStateRepository,
@@ -86,6 +89,8 @@ const REPOSITORY_TOKENS = [
   DISPUTE_REPOSITORY,
   VERIFICATION_REPOSITORY,
   PAYMENT_TRANSACTION_RUNNER,
+  BID_REPOSITORY,
+  BID_TRANSACTION_RUNNER,
 ];
 
 const POOL = Symbol('PgPool');
@@ -118,6 +123,8 @@ const POOL = Symbol('PgPool');
     { provide: DISPUTE_REPOSITORY, useClass: MemoryDisputeRepository },
     { provide: VERIFICATION_REPOSITORY, useClass: MemoryVerificationRepository },
     { provide: PAYMENT_TRANSACTION_RUNNER, useClass: MemoryPaymentTransactionRunner },
+    { provide: BID_REPOSITORY, useClass: MemoryBidRepository },
+    { provide: BID_TRANSACTION_RUNNER, useClass: MemoryBidTransactionRunner },
   ],
   exports: [...REPOSITORY_TOKENS, MemoryDatabase],
 })
@@ -178,6 +185,8 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: DISPUTE_REPOSITORY, useClass: DrizzleDisputeRepository },
     { provide: VERIFICATION_REPOSITORY, useClass: DrizzleVerificationRepository },
     { provide: PAYMENT_TRANSACTION_RUNNER, useClass: DrizzlePaymentTransactionRunner },
+    { provide: BID_REPOSITORY, useClass: DrizzleBidRepository },
+    { provide: BID_TRANSACTION_RUNNER, useClass: DrizzleBidTransactionRunner },
   ],
   exports: [...REPOSITORY_TOKENS, DRIZZLE],
 })
