@@ -65,9 +65,20 @@ export class MercadoPagoProvider implements PaymentProviderPort {
 
   private readonly logger = new Logger(MercadoPagoProvider.name);
 
+  /**
+   * Si las credenciales son de prueba.
+   *
+   * Lo decide **la credencial**, no `NODE_ENV`. Son dos ejes distintos y
+   * confundirlos costó una tarde: el entorno dice dónde corre el proceso, la
+   * credencial dice contra qué universo de Mercado Pago habla. Un despliegue
+   * de producción con credenciales `TEST-` es exactamente lo que hace falta
+   * para probar sin una máquina local, y es una combinación legítima.
+   */
+  private readonly sandbox: boolean;
+
   constructor(@Inject(ENV) private readonly env: AppEnv) {
-    const token = env.MERCADOPAGO_ACCESS_TOKEN ?? '';
-    if (!token.startsWith('TEST-') && !env.isProduction) {
+    this.sandbox = (env.MERCADOPAGO_ACCESS_TOKEN ?? '').startsWith('TEST-');
+    if (!this.sandbox && !env.isProduction) {
       // Ruidoso a propósito: cobrarle de verdad a alguien que estaba probando
       // es el error caro de este milestone.
       this.logger.warn(
@@ -174,9 +185,21 @@ export class MercadoPagoProvider implements PaymentProviderPort {
       },
     });
 
-    const checkoutUrl = this.env.isProduction
-      ? preference.init_point
-      : (preference.sandbox_init_point ?? preference.init_point);
+    /**
+     * A qué host se manda al comprador.
+     *
+     * Una preferencia creada con credenciales `TEST-` **solo** se puede pagar
+     * en `sandbox.mercadopago.com.uy`. La misma preferencia en `www.` muestra
+     * "Oh, no, algo anduvo mal" y no crea ningún pago — sin dato de error, sin
+     * llegar al webhook, sin nada que mirar del lado nuestro.
+     *
+     * Antes esto se elegía con `isProduction`, y por eso un despliegue de
+     * producción con credenciales de prueba mandaba a todo el mundo al host
+     * equivocado. Lo decide la credencial, que es quien sabe.
+     */
+    const checkoutUrl = this.sandbox
+      ? (preference.sandbox_init_point ?? preference.init_point)
+      : preference.init_point;
 
     if (!checkoutUrl) {
       throw new DomainError('PAYMENT_UNAVAILABLE', 'Mercado Pago returned no checkout URL');

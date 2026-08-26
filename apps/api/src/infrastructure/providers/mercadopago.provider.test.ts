@@ -191,8 +191,8 @@ describe('el cobro que se le pide al proveedor', () => {
     });
 
     expect(session.intentId).toBe('pref-1');
-    // Fuera de producción se usa el punto de sandbox: cobrarle de verdad a
-    // alguien que estaba probando es el error caro de este milestone.
+    // Credencial `TEST-`, así que el comprador va al host de sandbox. El
+    // porqué está en el bloque de abajo.
     expect(session.checkoutUrl).toBe('https://sandbox/checkout');
 
     const [call] = calls;
@@ -283,5 +283,79 @@ describe('firma del webhook', () => {
     });
 
     expect(created?.eventId).not.toBe(updated?.eventId);
+  });
+});
+
+/**
+ * A qué host se manda al comprador.
+ *
+ * Esto costó una tarde de producción y merece quedar escrito. Una preferencia
+ * creada con credenciales `TEST-` **solo** se puede pagar en
+ * `sandbox.mercadopago.com.uy`. La misma preferencia, con el mismo id, abierta
+ * en `www.` muestra "Oh, no, algo anduvo mal" y no crea ningún pago: sin
+ * detalle de error, sin llegar al webhook, sin una línea en nuestros logs.
+ * Desde adentro es indistinguible de que la integración esté mal.
+ *
+ * La elección se hacía con `isProduction`, y ahí estaba el error: el entorno
+ * dice dónde corre el proceso, la credencial dice contra qué universo de
+ * Mercado Pago se habla. Son dos ejes, y un despliegue de producción con
+ * credenciales de prueba —justo lo que hace falta para probar sin una máquina
+ * local— caía en la casilla equivocada.
+ */
+describe('el host del checkout lo decide la credencial, no el entorno', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function checkoutUrlFor(
+    overrides: Partial<AppEnv>,
+    preference: Record<string, unknown> = {
+      id: 'pref-1',
+      init_point: 'https://www/checkout',
+      sandbox_init_point: 'https://sandbox/checkout',
+    },
+  ): Promise<string> {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(preference), { status: 200 })));
+    const session = await new MercadoPagoProvider(env(overrides)).createCheckout({
+      paymentId: 'pay_1' as never,
+      purpose: 'order',
+      description: 'Plaza Moda — pedido VV-1',
+      currency: 'UYU',
+      grossMinor: 249_000,
+      commissionMinor: 7_470,
+      installments: 1,
+      sellerAccount: { accessToken: 'seller-token' } as never,
+      payer: { email: 'ana@ejemplo.uy', name: 'Ana' },
+      returnUrls: { success: 'https://web/ok', failure: 'https://web/no', pending: 'https://web/wait' },
+      notificationUrl: 'https://api.example.uy/payments/webhook/mercadopago',
+      externalReference: 'pay_1',
+    });
+    return session.checkoutUrl;
+  }
+
+  it('en producción con credenciales de prueba manda a sandbox', async () => {
+    // El caso que se rompió. `NODE_ENV=production` en Railway, credenciales
+    // `TEST-`: si esto vuelve a devolver el punto de producción, nadie puede
+    // pagar y no hay ningún error que lo explique.
+    expect(await checkoutUrlFor({ isProduction: true, MERCADOPAGO_ACCESS_TOKEN: 'TEST-abc' })).toBe(
+      'https://sandbox/checkout',
+    );
+  });
+
+  it('con credenciales productivas manda a producción, aunque el proceso no lo sea', async () => {
+    expect(
+      await checkoutUrlFor({ isProduction: false, MERCADOPAGO_ACCESS_TOKEN: 'APP_USR-abc' }),
+    ).toBe('https://www/checkout');
+  });
+
+  it('sin punto de sandbox cae al de producción en vez de quedarse sin URL', async () => {
+    // Preferir una URL que quizá no sirva a no tener ninguna: sin URL el
+    // comprador ve un error nuestro antes de llegar a intentar pagar.
+    expect(
+      await checkoutUrlFor({ isProduction: true, MERCADOPAGO_ACCESS_TOKEN: 'TEST-abc' }, {
+        id: 'pref-1',
+        init_point: 'https://www/checkout',
+      }),
+    ).toBe('https://www/checkout');
   });
 });
