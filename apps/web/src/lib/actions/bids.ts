@@ -1,7 +1,6 @@
 'use server';
 
 import type { BidSessionDto } from '@vivo/shared';
-import { revalidatePath } from 'next/cache';
 import { api } from '../api';
 import { failure, type ActionState } from './shared';
 
@@ -35,6 +34,25 @@ export async function placeBid(bidSessionId: string, amountMinor: number): Promi
   }
 }
 
+/**
+ * Abrir la puja **no** revalida la pantalla de transmisión.
+ *
+ * Antes lo hacía, y era el bug que dejaba al vendedor con la cámara en negro y
+ * "conexión inestable" a los pocos segundos de activar Modo Puja. Esa pantalla
+ * no es una página cualquiera: sostiene un `MediaStream` de la cámara y una
+ * sala de LiveKit publicando. Refrescarla en el medio de una transmisión es
+ * pedirle al navegador que rearme las dos cosas mientras la persona está al
+ * aire, y el costo lo paga entera la transmisión.
+ *
+ * No hacía falta ni siquiera para mostrar la puja: la consola reconcilia sola
+ * —cada acción llama a `onChanged`, y `useBidSessions` además consulta al
+ * servidor cada diez segundos porque acá se decide dinero—. Era una
+ * revalidación que no aportaba nada y rompía lo único que no se puede
+ * interrumpir.
+ *
+ * Ninguna de las otras acciones de puja revalidaba, y por eso el síntoma
+ * aparecía exactamente al abrir y no al ofertar ni al aceptar.
+ */
 export async function openBidSession(input: {
   liveSessionId: string;
   productId: string;
@@ -45,7 +63,6 @@ export async function openBidSession(input: {
   try {
     const client = await api();
     await client.bids.open(input);
-    revalidatePath(`/transmitir/${input.liveSessionId}`);
     return { status: 'success' };
   } catch (error) {
     return failure(error);

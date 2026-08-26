@@ -79,6 +79,33 @@ test('una puja de punta a punta: ofertar, aceptar, pagar', async ({ page, browse
 
   await expect(page.getByText('Puja activa')).toBeVisible();
 
+  // --- Y la camara sigue transmitiendo --------------------------------------
+  //
+  // Abrir la puja no puede costarle el video al vendedor. Estuvo asi en
+  // produccion: la accion revalidaba `/transmitir/<id>`, la pantalla que
+  // sostiene el `MediaStream` de la camara y la sala de LiveKit, y a los
+  // segundos de activar Modo Puja quedaba en negro con "conexion inestable".
+  //
+  // Se afirma sobre el elemento y no sobre un texto porque el sintoma es
+  // exactamente eso: un `<video>` sin fuente. `readyState >= 2` es "hay al
+  // menos un cuadro disponible", que es lo que la persona llama "se ve".
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const video = document.querySelector('video');
+          if (!video) return 'sin elemento';
+          if (!video.srcObject) return 'sin srcObject';
+          const live = (video.srcObject as MediaStream)
+            .getVideoTracks()
+            .some((track) => track.readyState === 'live');
+          if (!live) return 'pista muerta';
+          return video.readyState >= 2 ? 'transmitiendo' : 'sin cuadros';
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe('transmitiendo');
+
   // --- Ana oferta $1.000 ----------------------------------------------------
   const ana = await asUser(browser, DEMO.buyer, `/live/${liveId}`);
   await expect(ana.getByText('Modo puja')).toBeVisible();
