@@ -30,7 +30,8 @@ import { MemoryBidRepository, MemoryBidTransactionRunner } from '../memory/memor
 import { FakePaymentProvider } from '../../providers/fake-payment.provider';
 import { loadEnv } from '../../../config/env';
 import { PasswordService } from '../../security/password.service';
-import { SystemClock, UuidGenerator } from '../../system';
+import { UuidGenerator } from '../../system';
+import type { Clock } from '../../../application/ports/infrastructure';
 import type { StoreService } from '../../../application/services/store.service';
 import type { VivoDatabase } from '../drizzle/client';
 import { DrizzleOrderTransactionRunner } from '../drizzle/drizzle.order-transaction';
@@ -103,8 +104,43 @@ export class FaultInjectingRunner implements OrderTransactionRunner {
   }
 }
 
+/**
+ * Un reloj que se puede adelantar.
+ *
+ * Probar un vencimiento con el reloj del sistema exigiría esperar de verdad, y
+ * una espera de media hora no es una prueba: es una prueba que nadie corre.
+ * Adelantar el reloj prueba exactamente la misma condición —la fecha límite
+ * quedó atrás— en un milisegundo, y sin `sleep` arbitrarios en la suite.
+ */
+export class MovableClock implements Clock {
+  private current: Date;
+
+  /**
+   * Arranca en el ahora real a propósito.
+   *
+   * Fijarlo en una fecha inventada rompería las pruebas que arman escenarios
+   * contra el reloj del sistema —una reserva "vencida hace un minuto" deja de
+   * estarlo si el reloj del servicio vive en 2026—. Empezar donde empieza todo
+   * el mundo y moverlo solo cuando la prueba lo pide es lo que hace que este
+   * reloj se pueda agregar sin tocar nada de lo que ya existía.
+   */
+  constructor(start = new Date()) {
+    this.current = start;
+  }
+
+  now(): Date {
+    return this.current;
+  }
+
+  advance(seconds: number): void {
+    this.current = new Date(this.current.getTime() + seconds * 1_000);
+  }
+}
+
 export interface DriverHarness {
   readonly name: string;
+  /** El reloj que comparten los servicios, para probar vencimientos. */
+  readonly clock: MovableClock;
   readonly checkout: CheckoutService;
   /** El servicio de cobros del mismo driver, para probar el webhook con paridad. */
   readonly payments: PaymentService;
@@ -197,6 +233,7 @@ function buildServices(input: {
   payments: PaymentService;
   provider: FakePaymentProvider;
   bids: BidService;
+  clock: MovableClock;
 } {
   const provider = new FakePaymentProvider(new UuidGenerator());
   const testEnv = loadEnv({
@@ -205,6 +242,8 @@ function buildServices(input: {
     DATA_DRIVER: 'memory',
     DATABASE_URL: undefined,
   });
+
+  const clock = new MovableClock();
 
   // El Modo Puja se arma primero: los cobros lo necesitan para cerrar una puja
   // cuando el pago se aprueba, y la dependencia va en un solo sentido.
@@ -215,7 +254,7 @@ function buildServices(input: {
     input.users,
     new NoopRealtimePublisher(),
     new MemoryCacheStore(),
-    new SystemClock(),
+    clock,
     new UuidGenerator(),
     testEnv,
     input.stores,
@@ -230,7 +269,7 @@ function buildServices(input: {
     input.paymentRunner,
     input.users,
     new NoopRealtimePublisher(),
-    new SystemClock(),
+    clock,
     new UuidGenerator(),
     testEnv,
     liveServiceStub(),
@@ -242,14 +281,14 @@ function buildServices(input: {
     input.orders,
     input.runner,
     provider,
-    new SystemClock(),
+    clock,
     new UuidGenerator(),
     input.stores,
     payments,
     bids,
   );
 
-  return { checkout, payments, provider, bids };
+  return { checkout, payments, provider, bids, clock };
 }
 
 // --- Memory ------------------------------------------------------------------
@@ -281,6 +320,7 @@ export async function createMemoryHarness(): Promise<DriverHarness> {
     checkout: services.checkout,
     payments: services.payments,
     provider: services.provider,
+    clock: services.clock,
     bids: services.bids,
     bidRepo: new MemoryBidRepository(db),
     faults,
@@ -367,6 +407,7 @@ export async function createPgliteHarness(): Promise<DriverHarness> {
     checkout: services.checkout,
     payments: services.payments,
     provider: services.provider,
+    clock: services.clock,
     bids: services.bids,
     bidRepo: new DrizzleBidRepository(db),
     faults,

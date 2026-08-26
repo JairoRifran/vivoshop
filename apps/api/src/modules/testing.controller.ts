@@ -14,6 +14,8 @@ import { Public } from '../common/auth.guard';
 import { ENV, type AppEnv } from '../config/env';
 import { MemoryDatabase } from '../infrastructure/persistence/memory/memory-database';
 import { PasswordService } from '../infrastructure/security/password.service';
+import { ApplicationModule } from '../application/application.module';
+import { PaymentService } from '../application/services/payment.service';
 
 /**
  * Devolver el mundo al estado sembrado, entre pruebas.
@@ -52,6 +54,7 @@ export class TestingController {
     @Inject(ENV) private readonly env: AppEnv,
     private readonly passwords: PasswordService,
     private readonly db: MemoryDatabase,
+    private readonly payments: PaymentService,
   ) {}
 
   /**
@@ -65,17 +68,40 @@ export class TestingController {
   @Post('reset')
   @HttpCode(204)
   async reset(@Headers('x-e2e-reset') token?: string): Promise<void> {
+    this.assertAllowed(token);
+
+    await this.db.seed((plain) => this.passwords.hash(plain), { force: true });
+    this.logger.log('Estado reiniciado al conjunto sembrado.');
+  }
+
+  /**
+   * Corre el barrido de reservas vencidas, ya mismo.
+   *
+   * El barrido real corre cada quince segundos y decide con el TTL configurado.
+   * Esperar eso en una prueba sería una espera arbitraria, y bajar el TTL a un
+   * segundo haría que cualquier pedido a medio pagar de **otra** prueba
+   * desapareciera por su cuenta.
+   *
+   * Así que se barre "como si fuera" mañana: la misma comparación de fechas,
+   * el mismo camino, en el momento exacto en que la prueba lo pide.
+   */
+  @Public()
+  @Post('sweep-reservations')
+  @HttpCode(200)
+  async sweep(@Headers('x-e2e-reset') token?: string): Promise<{ resolved: number }> {
+    this.assertAllowed(token);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+    return { resolved: await this.payments.expireLapsedCheckouts(tomorrow) };
+  }
+
+  private assertAllowed(token?: string): void {
     const expected = this.env.E2E_RESET_TOKEN ?? '';
     const given = token ?? '';
     const ok =
       expected.length > 0 &&
       given.length === expected.length &&
       timingSafeEqual(Buffer.from(given), Buffer.from(expected));
-
     if (!ok) throw new ForbiddenException();
-
-    await this.db.seed((plain) => this.passwords.hash(plain), { force: true });
-    this.logger.log('Estado reiniciado al conjunto sembrado.');
   }
 }
 
@@ -93,7 +119,14 @@ export class TestingModule {
       env.NODE_ENV === 'test' && env.DATA_DRIVER === 'memory' && Boolean(env.E2E_RESET_TOKEN);
 
     return enabled
-      ? { module: TestingModule, controllers: [TestingController] }
+      ? {
+          module: TestingModule,
+          // `ApplicationModule` trae `PaymentService`, que es quien sabe barrer
+          // reservas. Importarlo acá y no duplicar el servicio es lo que hace
+          // que la prueba corra por el mismo camino que producción.
+          imports: [ApplicationModule],
+          controllers: [TestingController],
+        }
       : { module: TestingModule };
   }
 }

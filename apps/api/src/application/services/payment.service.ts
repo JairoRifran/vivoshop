@@ -22,6 +22,7 @@ import {
   shouldReleaseStock,
   splitPayment,
   toAccountView,
+  isCheckoutReservationLapsed,
 } from '@vivo/domain';
 import { ENV, type AppEnv } from '../../config/env';
 import type { Clock, IdGenerator } from '../ports/infrastructure';
@@ -31,6 +32,7 @@ import type {
   PaymentRepository,
   PaymentTransaction,
   PaymentTransactionRunner,
+  ProviderPayment,
   SellerPaymentAccountRepository,
 } from '../ports/payments';
 import {
@@ -237,7 +239,13 @@ export class PaymentService {
     tx: PaymentTransaction,
     input: {
       paymentId: PaymentId;
-      providerPaymentId: string;
+      /**
+       * `null` cuando el desenlace no vino de un pago del proveedor.
+       *
+       * Es el caso de una reserva que vence sin que nadie haya pagado: no hay
+       * id que guardar, y poner uno inventado seria peor que no poner ninguno.
+       */
+      providerPaymentId: string | null;
       status: Payment['status'];
       failureReason: string | null;
       approvedAt: Date | null;
@@ -356,6 +364,141 @@ export class PaymentService {
     } catch {
       // Un socket que nadie escucha no puede deshacer un cobro que ocurrió.
     }
+  }
+
+  // --- Reservas de checkout ----------------------------------------------------
+
+  /**
+   * Devuelve a la góndola el stock de los checkouts que nadie pagó.
+   *
+   * ## El problema que resuelve
+   *
+   * Reservar stock al crear el pedido es correcto —dos personas no pueden
+   * comprar la última unidad— pero sin vencimiento la reserva es eterna. Quien
+   * abre el checkout y se va deja el producto trabado para siempre. Se vio en
+   * producción: siete pedidos reteniendo siete unidades, ninguno pagado nunca.
+   *
+   * ## Por qué un barrido y no un temporizador
+   *
+   * Un temporizador por reserva no sobrevive a un reinicio, y una reserva
+   * abandonada justo antes de un deploy quedaría trabada para siempre — que es
+   * exactamente el problema que se está arreglando. El barrido lee el estado
+   * actual, así que es correcto después de cualquier reinicio y se puede correr
+   * las veces que sea.
+   *
+   * ## Por qué se le pregunta al proveedor
+   *
+   * Que no haya llegado un aviso admite dos lecturas: el comprador abandonó, o
+   * el aviso se perdió. Son indistinguibles desde acá, y equivocarse hacia el
+   * lado fácil significa liberarle el stock a alguien que sí pagó. Así que
+   * antes de liberar se consulta, y si el proveedor dice que hay un pago
+   * —aprobado o todavía en curso— manda él. El TTL local solo decide cuando el
+   * proveedor no tiene nada que decir.
+   *
+   * Y esto además **recupera avisos perdidos**: un pago aprobado del que nunca
+   * supimos entra por el mismo camino que un webhook y mueve el pedido a
+   * `paid`. El barrido no es solo un liberador de stock; es la red que atrapa
+   * lo que el webhook dejó pasar.
+   *
+   * ## La carrera
+   *
+   * El aviso de aprobación y este barrido pueden ocurrir a la vez. No hace
+   * falta nada especial para resolverlo, y ahí está lo bueno del diseño: los
+   * dos aplican su desenlace por `applyInsideTransaction`, que toma el pago con
+   * `SELECT … FOR UPDATE` y lo pasa por `assertPaymentTransition`. `pending`
+   * sale una sola vez. El segundo en llegar encuentra un pago que ya no está
+   * pendiente y no hace nada — ni libera de nuevo, ni consume de nuevo.
+   */
+  async expireLapsedCheckouts(asOf?: Date): Promise<number> {
+    // `asOf` existe para poder barrer "como si fuera" otro momento. Lo usa el
+    // E2E para no tener que esperar media hora, y no cambia nada del camino:
+    // se decide con la misma comparación de fechas que en producción.
+    const now = asOf ?? this.clock.now();
+    const candidates = await this.payments.listLapsedReservations({
+      now,
+      createdBefore: new Date(now.getTime() - this.env.CHECKOUT_RESERVATION_TTL_SECONDS * 1_000),
+    });
+
+    let resolved = 0;
+    for (const candidate of candidates) {
+      try {
+        if (await this.resolveLapsedCheckout(candidate, now)) resolved += 1;
+      } catch (error) {
+        // Un candidato que falla no puede frenar a los demás: el proveedor
+        // puede estar caído para uno y responder para otro, y la próxima
+        // pasada vuelve a intentarlo.
+        this.logger.warn(
+          `No se pudo resolver la reserva de ${String(candidate.id)}: ${
+            error instanceof Error ? error.message : 'error desconocido'
+          }`,
+        );
+      }
+    }
+
+    return resolved;
+  }
+
+  /** Un candidato, con la decisión tomada donde corresponde. */
+  private async resolveLapsedCheckout(candidate: Payment, now: Date): Promise<boolean> {
+    const truth = await this.providerTruthFor(candidate);
+
+    // El proveedor dice que sigue en curso: la reserva se mantiene. Puede pasar
+    // con efectivo —un cupón de Abitab vive días— y liberar ahí sería vender
+    // dos veces la misma unidad.
+    if (truth?.status === 'pending') return false;
+
+    const outcome = await this.transactions.run(async (tx) => {
+      const current = await tx.loadPayment(candidate.id);
+      // Entre la consulta y el lock pudo llegar el aviso. La máquina de estados
+      // lo rechazaría igual; salir acá evita el error y deja el log limpio.
+      if (!current || current.status !== 'pending') return null;
+      if (!isCheckoutReservationLapsed(current, now, this.env.CHECKOUT_RESERVATION_TTL_SECONDS)) {
+        return null;
+      }
+
+      return this.applyInsideTransaction(tx, {
+        paymentId: current.id,
+        providerPaymentId: truth?.providerPaymentId ?? current.providerPaymentId,
+        status: truth?.status ?? 'expired',
+        failureReason: truth ? truth.failureReason : 'reservation_expired',
+        approvedAt: truth?.approvedAt ?? null,
+      });
+    });
+
+    if (!outcome) return false;
+    // Un pago recuperado por el barrido es una venta igual que una que llegó
+    // por webhook: se anuncia por el mismo camino, con el mismo aviso al
+    // vendedor y la misma marca sobre la puja si vino de una.
+    if (outcome.announce) {
+      await this.announceApproved(outcome.order, outcome.payment);
+      if (outcome.order) await this.bids.markSold(outcome.order.id).catch(() => undefined);
+    }
+    return true;
+  }
+
+  /**
+   * Lo que el proveedor sabe de este pago, o `null` si no sabe nada.
+   *
+   * Dos caminos, porque hay dos formas de no tener respuesta: con id de pago se
+   * consulta directo; sin id —el caso de un checkout que nunca se completó— hay
+   * que buscar por nuestra referencia. Sin cuenta del vendedor no hay a quién
+   * preguntarle, y ahí se devuelve `null` en vez de inventar.
+   */
+  private async providerTruthFor(payment: Payment): Promise<ProviderPayment | null> {
+    const account = await this.resolveSellerAccount(payment);
+    if (!account) return null;
+
+    if (payment.providerPaymentId) {
+      return this.provider.getPayment({
+        providerPaymentId: payment.providerPaymentId,
+        sellerAccount: account,
+      });
+    }
+
+    return this.provider.findPaymentByReference({
+      externalReference: String(payment.id),
+      sellerAccount: account,
+    });
   }
 
   // --- Conexión de la cuenta del vendedor --------------------------------------
@@ -580,6 +723,17 @@ export class PaymentService {
    * Solo la produce un proveedor que declaró `requiresSellerAccount === false`.
    * Con Mercado Pago este método no se alcanza nunca.
    */
+  /**
+   * La cuenta con la que consultarle al proveedor por un pago propio.
+   *
+   * A diferencia de `resolveAccount`, que resuelve desde lo que trae un aviso,
+   * acá ya sabemos de qué tienda es el pago: alcanza con buscarla.
+   */
+  private async resolveSellerAccount(payment: Payment): Promise<SellerPaymentAccount | null> {
+    if (!this.provider.requiresSellerAccount) return this.localAccount(payment.storeId);
+    return this.accounts.find(payment.storeId, this.provider.key);
+  }
+
   private localAccount(storeId: Store['id'] | null): SellerPaymentAccount {
     const now = this.clock.now();
     return {

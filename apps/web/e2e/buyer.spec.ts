@@ -1,4 +1,5 @@
-import { expect, test } from './fixtures';
+import type { Page } from '@playwright/test';
+import { expect, stockOf, sweepReservations, test } from './fixtures';
 import { DEMO, expectNoHorizontalScroll, failOnConsoleErrors, signIn } from './support';
 
 /**
@@ -194,4 +195,72 @@ test('an unknown route shows a real 404, not a crash', async ({ page }) => {
   const response = await page.goto('/no-existe-esta-ruta');
   expect(response?.status()).toBe(404);
   await expect(page.getByRole('heading', { name: 'No encontramos esta página' })).toBeVisible();
+});
+
+/**
+ * La reserva de stock de un checkout.
+ *
+ * Reservar al crear el pedido es correcto: dos personas no pueden comprar la
+ * última unidad. Lo que faltaba era el vencimiento — y su ausencia estuvo en
+ * producción, con siete pedidos reteniendo siete unidades que nadie pagó
+ * nunca.
+ *
+ * El stock se lee de la API porque en la pantalla solo aparece cuando ya es
+ * bajo ("Quedan 3"); afirmar desde la UI probaría el umbral de escasez, no la
+ * reserva.
+ */
+async function reachSimulatedPayment(page: Page): Promise<void> {
+  await signIn(page, DEMO.buyer, '/');
+  await page.goto('/producto/campera-roma');
+  await page.getByRole('button', { name: /Comprar/ }).first().click();
+  await page.waitForURL(/\/checkout/);
+
+  await page.getByText('Retiro en la tienda').click();
+  await page.getByLabel('Teléfono').fill('099 123 456');
+  await page.getByRole('button', { name: /^Pagar/ }).click();
+
+  await page.waitForURL(/\/compras\//, { timeout: 25_000 });
+  await expect(page.getByText('Pago de prueba')).toBeVisible();
+}
+
+test('un checkout abandonado devuelve el stock al vencer', async ({ page }) => {
+  const antes = await stockOf('campera-roma');
+
+  await reachSimulatedPayment(page);
+
+  // La unidad está reservada: el pedido existe y nadie pagó.
+  expect(await stockOf('campera-roma')).toBe(antes - 1);
+
+  // Y acá la persona se va. No paga, no cancela, cierra la pestaña.
+  expect(await sweepReservations()).toBe(1);
+
+  expect(await stockOf('campera-roma')).toBe(antes);
+  await page.reload();
+  await expect(page.getByText(/Cancelad/)).toBeVisible();
+});
+
+test('un pago aprobado sobre el vencimiento gana: el stock no vuelve', async ({ page }) => {
+  /**
+   * La carrera, vista desde el navegador.
+   *
+   * El comprador paga justo cuando la reserva estaba por vencer. El barrido
+   * pasa inmediatamente después y no puede deshacer la venta: la unidad se
+   * consumió, y devolverla inventaría mercadería que ya salió.
+   *
+   * La exclusión no la pone este test ni una guarda especial del barrido: la
+   * ponen el lock del pago y la máquina de estados, que deja salir de
+   * `pending` una sola vez. Acá se comprueba el resultado.
+   */
+  const antes = await stockOf('campera-roma');
+
+  await reachSimulatedPayment(page);
+  await page.getByRole('button', { name: 'Pagar', exact: true }).click();
+  await expect(page.getByText('¡Compra confirmada!')).toBeVisible({ timeout: 25_000 });
+
+  // El barrido pasa después de la aprobación y no encuentra nada que liberar.
+  expect(await sweepReservations()).toBe(0);
+
+  expect(await stockOf('campera-roma')).toBe(antes - 1);
+  await page.reload();
+  await expect(page.getByText('¡Compra confirmada!')).toBeVisible();
 });

@@ -219,6 +219,156 @@ for (const definition of harnesses) {
       await expect(harness.checkout.startPayment(BUYER, asOrderId(orderId))).rejects.toThrow();
     });
 
+    // --- La reserva de stock del checkout ---------------------------------
+    //
+    // Reservar al crear el pedido es correcto: dos personas no pueden comprar
+    // la última unidad. Sin vencimiento, la reserva es eterna — y eso estuvo
+    // en producción, con siete pedidos reteniendo siete unidades que nadie
+    // pagó nunca.
+    //
+    // El reloj se adelanta en vez de esperar. Prueba exactamente la misma
+    // condición —la fecha límite quedó atrás— sin que la suite duerma.
+
+    const TTL = 30 * 60;
+
+    it('un checkout abandonado devuelve el stock al vencer', async () => {
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      const { orderId } = await buy(2);
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes - 2);
+
+      harness.clock.advance(TTL + 1);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(1);
+
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes);
+      const order = await loadOrder(harness, orderId);
+      expect(order?.status).toBe('cancelled');
+      expect(order?.payment.status).toBe('expired');
+    });
+
+    it('antes del vencimiento no toca nada', async () => {
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      await buy(2);
+
+      harness.clock.advance(TTL - 60);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(0);
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes - 2);
+    });
+
+    it('el barrido es idempotente: correrlo de nuevo no inventa stock', async () => {
+      // La consecuencia de que no lo fuera sería vender unidades que no están
+      // en el depósito. Se corre tres veces a propósito.
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      await buy(2);
+      harness.clock.advance(TTL + 1);
+
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(1);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(0);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(0);
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes);
+    });
+
+    it('un pago aprobado consume la reserva: el barrido no la devuelve', async () => {
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      const { orderId, intentId } = await buy(2);
+
+      const event = await settle(intentId, 'approved');
+      await harness.payments.handleWebhook({
+        body: event.body,
+        headers: {},
+        rawBody: JSON.stringify(event.body),
+      });
+
+      // Y ahora pasa el barrido, mucho después del vencimiento.
+      harness.clock.advance(TTL * 10);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(0);
+
+      // El stock quedó consumido, no devuelto: la mercadería se vendió.
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes - 2);
+      expect((await loadOrder(harness, orderId))?.status).toBe('paid');
+    });
+
+    it('un rechazo ya devolvió la reserva, y el barrido no la devuelve otra vez', async () => {
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      const { intentId } = await buy(2);
+
+      const event = await settle(intentId, 'rejected');
+      await harness.payments.handleWebhook({
+        body: event.body,
+        headers: {},
+        rawBody: JSON.stringify(event.body),
+      });
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes);
+
+      harness.clock.advance(TTL + 1);
+      expect(await harness.payments.expireLapsedCheckouts()).toBe(0);
+      // Si el barrido volviera a liberar, acá habría más stock que al empezar:
+      // unidades inventadas.
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes);
+    });
+
+    it('la carrera aviso-aprobado contra barrido termina en un solo desenlace', async () => {
+      /**
+       * El caso que hay que probar de verdad.
+       *
+       * El comprador paga justo cuando la reserva vence. El aviso y el barrido
+       * salen a la vez y los dos quieren mover el mismo pago. Uno tiene que
+       * ganar y el otro no puede hacer nada — ni liberar stock que ya se
+       * consumió, ni consumir stock que ya se liberó.
+       *
+       * Lo que lo garantiza no es una guarda especial de este barrido: es que
+       * los dos pasan por la misma transacción, que toma el pago con
+       * `SELECT … FOR UPDATE`, y por la máquina de estados, que deja salir de
+       * `pending` una sola vez.
+       */
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      const { orderId, intentId } = await buy(2);
+      const event = await settle(intentId, 'approved');
+
+      harness.clock.advance(TTL + 1);
+
+      const [webhook, sweep] = await Promise.allSettled([
+        harness.payments.handleWebhook({
+          body: event.body,
+          headers: {},
+          rawBody: JSON.stringify(event.body),
+        }),
+        harness.payments.expireLapsedCheckouts(),
+      ]);
+
+      // Ninguno de los dos puede explotar: el que pierde se retira en silencio.
+      expect(webhook.status).toBe('fulfilled');
+      expect(sweep.status).toBe('fulfilled');
+
+      const order = await loadOrder(harness, orderId);
+      const stock = await harness.readStock(PRODUCT, VARIANT);
+
+      // Un único resultado coherente, sea cual sea el que ganó: o se vendió y
+      // el stock quedó consumido, o venció y volvió entero. Nunca la mezcla.
+      if (order?.payment.status === 'approved') {
+        expect(order.status).toBe('paid');
+        expect(stock).toBe(antes - 2);
+      } else {
+        expect(order?.payment.status).toBe('expired');
+        expect(order?.status).toBe('cancelled');
+        expect(stock).toBe(antes);
+      }
+    });
+
+    it('cien barridos en paralelo liberan una sola vez', async () => {
+      // La versión bruta de lo anterior: si la exclusión dependiera de una
+      // lectura previa en vez del lock, acá aparecerían unidades de la nada.
+      const antes = await harness.readStock(PRODUCT, VARIANT);
+      await buy(1);
+      harness.clock.advance(TTL + 1);
+
+      const results = await Promise.all(
+        Array.from({ length: 100 }, () => harness.payments.expireLapsedCheckouts()),
+      );
+
+      expect(results.reduce((total, value) => total + value, 0)).toBe(1);
+      expect(await harness.readStock(PRODUCT, VARIANT)).toBe(antes);
+    });
+
     it('un aviso que no reconocemos no rompe nada', async () => {
       await expect(
         harness.payments.handleWebhook({

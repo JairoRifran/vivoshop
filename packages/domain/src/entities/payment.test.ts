@@ -5,6 +5,8 @@ import {
   PAYMENT_STATUSES,
   assertPaymentTransition,
   canTransitionPayment,
+  checkoutReservationDeadline,
+  isCheckoutReservationLapsed,
   isPaymentSettled,
   orderStatusForPayment,
   releasesStock,
@@ -118,5 +120,46 @@ describe('propósito del pago', () => {
     // El día que se cobre por promocionar un vivo, tiene que entrar por el
     // mismo circuito y no por un segundo sistema de pagos.
     expect([...PAYMENT_PURPOSES]).toEqual(['order', 'live_promotion']);
+  });
+});
+
+describe('la reserva de stock de un checkout', () => {
+  const base = {
+    status: 'pending' as PaymentStatus,
+    createdAt: new Date('2026-08-26T12:00:00Z'),
+    expiresAt: null,
+  };
+  const TTL = 1_800;
+
+  it('manda la fecha del proveedor cuando existe', () => {
+    // Es la que ve el comprador en la pantalla de pago. Liberar antes sería
+    // quitarle el producto a alguien que todavía está en tiempo de pagarlo.
+    const conFecha = { ...base, expiresAt: new Date('2026-08-26T18:00:00Z') };
+    expect(checkoutReservationDeadline(conFecha, TTL)).toEqual(
+      new Date('2026-08-26T18:00:00Z'),
+    );
+    // Y gana incluso cuando es más lejana que el TTL local.
+    expect(isCheckoutReservationLapsed(conFecha, new Date('2026-08-26T13:00:00Z'), TTL)).toBe(
+      false,
+    );
+  });
+
+  it('sin fecha del proveedor, vale el TTL local', () => {
+    expect(checkoutReservationDeadline(base, TTL)).toEqual(new Date('2026-08-26T12:30:00Z'));
+  });
+
+  it('vence justo al cumplirse el plazo, no un segundo después', () => {
+    expect(isCheckoutReservationLapsed(base, new Date('2026-08-26T12:29:59Z'), TTL)).toBe(false);
+    expect(isCheckoutReservationLapsed(base, new Date('2026-08-26T12:30:00Z'), TTL)).toBe(true);
+  });
+
+  it('un pago ya resuelto no tiene reserva que vencer', () => {
+    // Primera defensa contra liberar dos veces: `approved` ya la consumió y
+    // `rejected`/`cancelled`/`expired` ya la devolvieron. La segunda defensa es
+    // la máquina de estados, que solo deja salir de `pending` una vez.
+    const tarde = new Date('2027-01-01T00:00:00Z');
+    for (const status of ['approved', 'rejected', 'cancelled', 'expired', 'refunded'] as const) {
+      expect(isCheckoutReservationLapsed({ ...base, status }, tarde, TTL)).toBe(false);
+    }
   });
 });

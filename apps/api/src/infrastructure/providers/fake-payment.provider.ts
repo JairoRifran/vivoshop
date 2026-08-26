@@ -136,6 +136,18 @@ export class FakePaymentProvider implements PaymentProviderPort {
     };
   }
 
+  /**
+   * El proveedor de desarrollo no sabe buscar por referencia.
+   *
+   * Devuelve `null`, que en el contrato significa "no tengo nada que decir de
+   * esa referencia", y el barrido entonces decide con el TTL local. Es la
+   * respuesta honesta: este proveedor no tiene una verdad externa que
+   * consultar, porque su verdad vive en el mismo proceso.
+   */
+  async findPaymentByReference(): Promise<ProviderPayment | null> {
+    return null;
+  }
+
   parseWebhook(input: {
     body: unknown;
     headers?: Record<string, string | string[] | undefined>;

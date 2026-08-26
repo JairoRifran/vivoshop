@@ -75,12 +75,13 @@ export class MemoryPaymentRepository implements PaymentRepository {
       .slice(0, limit);
   }
 
-  async listExpired(now: Date): Promise<Payment[]> {
+  async listLapsedReservations(input: { now: Date; createdBefore: Date }): Promise<Payment[]> {
     return [...this.db.payments.values()].filter(
       (payment) =>
         payment.status === 'pending' &&
-        payment.expiresAt !== null &&
-        payment.expiresAt.getTime() <= now.getTime(),
+        (payment.expiresAt !== null
+          ? payment.expiresAt.getTime() <= input.now.getTime()
+          : payment.createdAt.getTime() <= input.createdBefore.getTime()),
     );
   }
 }

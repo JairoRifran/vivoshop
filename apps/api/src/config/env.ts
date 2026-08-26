@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { DEFAULT_CHECKOUT_RESERVATION_SECONDS } from '@vivo/domain';
 import { loadEncryptionKeys } from '../infrastructure/crypto/secret-box';
 
 /**
@@ -133,6 +134,23 @@ const envSchema = z.object({
    * repartido por el codigo seria el problema.
    */
   BID_RESERVATION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+  /**
+   * Cuanto se le guarda el stock a un checkout que nadie paga.
+   *
+   * Sin esto la reserva es eterna: quien abre el checkout y se va deja el
+   * producto trabado para siempre. Paso en produccion --siete pedidos
+   * reteniendo siete unidades-- y por eso existe.
+   *
+   * Vive aca y en `DEFAULT_CHECKOUT_RESERVATION_SECONDS` del dominio, y en
+   * ningun otro lado. Si el proveedor pone su propia fecha de vencimiento,
+   * gana la del proveedor: es la que ve el comprador.
+   */
+  CHECKOUT_RESERVATION_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(DEFAULT_CHECKOUT_RESERVATION_SECONDS),
 
   // --- Cifrado en reposo (M04.1) ----------------------------------------
   /**

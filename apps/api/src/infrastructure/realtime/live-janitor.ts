@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { BidService } from '../../application/services/bid.service';
 import { LiveService } from '../../application/services/live.service';
+import { PaymentService } from '../../application/services/payment.service';
 
 /**
  * How often abandoned sessions are swept up.
@@ -47,6 +48,7 @@ export class LiveJanitor implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(forwardRef(() => LiveService)) private readonly live: LiveService,
     @Inject(forwardRef(() => BidService)) private readonly bids: BidService,
+    @Inject(forwardRef(() => PaymentService)) private readonly payments: PaymentService,
   ) {}
 
   onModuleInit(): void {
@@ -85,7 +87,24 @@ export class LiveJanitor implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Cerradas ${orphaned} pujas de transmisiones terminadas`);
       }
 
-      return closed + expired + orphaned;
+      /**
+       * Los checkouts que nadie pagó.
+       *
+       * Va acá y no en un barrido aparte porque es el mismo problema que los
+       * otros tres: algo quedó a medias y nadie va a volver a tocarlo. Y
+       * comparte la propiedad que hace que este diseño funcione — lee el
+       * estado actual, así que es correcto después de cualquier reinicio.
+       *
+       * Cuenta más de lo que el nombre sugiere: además de liberar stock,
+       * recupera pagos aprobados cuyo aviso se perdió. Ver
+       * `expireLapsedCheckouts`.
+       */
+      const checkouts = await this.payments.expireLapsedCheckouts();
+      if (checkouts > 0) {
+        this.logger.log(`Resueltas ${checkouts} reservas de checkout vencidas`);
+      }
+
+      return closed + expired + orphaned + checkouts;
     } catch (error) {
       // A failed sweep is not fatal: the next one sees the same state.
       this.logger.warn(`Barrido incompleto: ${String(error)}`);

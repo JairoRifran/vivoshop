@@ -63,4 +63,36 @@ export const test = base.extend<{ freshWorld: void }>({
   ],
 });
 
+/**
+ * Herramientas de la API de pruebas, para lo que el navegador no puede ver.
+ *
+ * El stock no está en ninguna pantalla salvo cuando ya es bajo —"Quedan 3"—,
+ * así que afirmar sobre él desde la UI probaría el umbral de escasez y no la
+ * reserva. Se lee de la API, que es donde vive la verdad.
+ */
+export async function stockOf(productId: string): Promise<number> {
+  const api = await request.newContext({ baseURL: E2E.apiUrl });
+  try {
+    const response = await api.get(`/products/${productId}`);
+    const product = (await response.json()) as { variants: Array<{ stock: number }> };
+    return product.variants.reduce((total, variant) => total + variant.stock, 0);
+  } finally {
+    await api.dispose();
+  }
+}
+
+/** Corre el barrido de reservas vencidas ya mismo. Ver `testing.controller.ts`. */
+export async function sweepReservations(): Promise<number> {
+  const api = await request.newContext({ baseURL: E2E.apiUrl });
+  try {
+    const response = await api.post('/testing/sweep-reservations', {
+      headers: { 'x-e2e-reset': E2E.resetToken },
+    });
+    const body = (await response.json()) as { resolved: number };
+    return body.resolved;
+  } finally {
+    await api.dispose();
+  }
+}
+
 export { expect } from '@playwright/test';

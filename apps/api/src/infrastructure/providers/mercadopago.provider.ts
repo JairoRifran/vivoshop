@@ -235,7 +235,17 @@ export class MercadoPagoProvider implements PaymentProviderPort {
     providerPaymentId: string;
     sellerAccount: { accessToken: string | null };
   }): Promise<ProviderPayment> {
-    const payment = await this.request<{
+    const payment = await this.request<unknown>(`/v1/payments/${input.providerPaymentId}`, {
+      method: 'GET',
+      token: input.sellerAccount.accessToken ?? this.env.MERCADOPAGO_ACCESS_TOKEN ?? '',
+    });
+
+    return this.toProviderPayment(payment);
+  }
+
+  /** La traducción, en un solo lugar: la consulta por id y la búsqueda la comparten. */
+  private toProviderPayment(raw: unknown): ProviderPayment {
+    const payment = raw as {
       id: number | string;
       status: string;
       status_detail?: string;
@@ -244,10 +254,7 @@ export class MercadoPagoProvider implements PaymentProviderPort {
       currency_id?: string;
       installments?: number;
       date_approved?: string | null;
-    }>(`/v1/payments/${input.providerPaymentId}`, {
-      method: 'GET',
-      token: input.sellerAccount.accessToken ?? this.env.MERCADOPAGO_ACCESS_TOKEN ?? '',
-    });
+    };
 
     return {
       providerPaymentId: String(payment.id),
@@ -260,6 +267,44 @@ export class MercadoPagoProvider implements PaymentProviderPort {
       // Mercado Pago liquida por su cuenta; no hay retención que informar.
       settlement: null,
     };
+  }
+
+  /**
+   * Busca por nuestra referencia, cuando no sabemos el id de Mercado Pago.
+   *
+   * La usa el barrido de reservas antes de liberar stock. Ahí la pregunta es
+   * "¿el comprador abandonó, o el aviso se perdió?", y solo el proveedor la
+   * puede contestar.
+   *
+   * Cuando hay varios resultados —un rechazo y después un reintento aprobado,
+   * por ejemplo— gana el más concluyente: un pago aprobado manda sobre uno
+   * pendiente, y uno pendiente sobre uno rechazado. Quedarse con el primero
+   * que devuelve la búsqueda sería dejar la decisión librada a un orden que
+   * Mercado Pago no promete.
+   */
+  async findPaymentByReference(input: {
+    externalReference: string;
+    sellerAccount: { accessToken: string | null };
+  }): Promise<ProviderPayment | null> {
+    const found = await this.request<{ results?: unknown[] }>(
+      `/v1/payments/search?external_reference=${encodeURIComponent(input.externalReference)}`,
+      { method: 'GET', token: input.sellerAccount.accessToken ?? this.env.MERCADOPAGO_ACCESS_TOKEN ?? '' },
+    );
+
+    const payments = (found.results ?? []).map((raw) => this.toProviderPayment(raw));
+    if (payments.length === 0) return null;
+
+    const rank: Record<PaymentStatus, number> = {
+      approved: 5,
+      refunded: 4,
+      pending: 3,
+      rejected: 2,
+      cancelled: 1,
+      expired: 0,
+    };
+    return payments.reduce((best, current) =>
+      rank[current.status] > rank[best.status] ? current : best,
+    );
   }
 
   /**

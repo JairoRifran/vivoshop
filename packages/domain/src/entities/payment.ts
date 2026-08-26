@@ -75,6 +75,57 @@ export function assertPaymentTransition(from: PaymentStatus, to: PaymentStatus):
   }
 }
 
+/**
+ * Cuánto vive una reserva de stock mientras nadie paga.
+ *
+ * Media hora: bastante para pagar con calma —buscar la tarjeta, cambiar de
+ * dispositivo, volver del banco— y poco para que un carrito abandonado deje un
+ * producto trabado. En un vivo, donde el stock es escaso y la demanda dura lo
+ * que dura la transmisión, retener una unidad de más es perder una venta que
+ * estaba ahí.
+ *
+ * Vive acá y en `CHECKOUT_RESERVATION_TTL_SECONDS`, y en ningún otro lado.
+ */
+export const DEFAULT_CHECKOUT_RESERVATION_SECONDS = 30 * 60;
+
+/**
+ * Hasta cuándo se le guarda el stock a un pago sin resolver.
+ *
+ * **Manda el proveedor cuando opina.** Si la preferencia trae fecha de
+ * vencimiento, esa gana: es la que conoce el comprador —es la que ve en la
+ * pantalla de pago— y liberar antes sería quitarle el producto a alguien que
+ * todavía está en tiempo de pagarlo. El TTL local es el respaldo para cuando el
+ * proveedor no dice nada, que es el caso de Checkout Pro sin expiración.
+ */
+export function checkoutReservationDeadline(
+  payment: { readonly createdAt: Date; readonly expiresAt: Date | null },
+  ttlSeconds: number,
+): Date {
+  return payment.expiresAt ?? new Date(payment.createdAt.getTime() + ttlSeconds * 1_000);
+}
+
+/**
+ * Si la reserva ya se venció.
+ *
+ * Solo un pago `pending` tiene reserva que vencer: los demás ya resolvieron —
+ * `approved` la consumió, `rejected`, `cancelled` y `expired` la devolvieron—.
+ * Preguntar por uno resuelto siempre da `false`, y esa es la primera de las dos
+ * defensas contra liberar dos veces. La segunda es la máquina de estados, que
+ * solo deja salir de `pending` una vez.
+ */
+export function isCheckoutReservationLapsed(
+  payment: {
+    readonly status: PaymentStatus;
+    readonly createdAt: Date;
+    readonly expiresAt: Date | null;
+  },
+  now: Date,
+  ttlSeconds: number,
+): boolean {
+  if (payment.status !== 'pending') return false;
+  return checkoutReservationDeadline(payment, ttlSeconds).getTime() <= now.getTime();
+}
+
 /** Un pago que ya no va a cambiar por su cuenta. */
 export function isPaymentSettled(status: PaymentStatus): boolean {
   return status !== 'pending';

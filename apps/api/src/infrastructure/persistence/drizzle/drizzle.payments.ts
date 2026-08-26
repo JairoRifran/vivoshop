@@ -12,7 +12,7 @@ import type {
   StoreId,
   UserId,
 } from '@vivo/domain';
-import { and, desc, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type {
   DisputeRepository,
   OAuthStateRepository,
@@ -104,11 +104,19 @@ export class DrizzlePaymentRepository implements PaymentRepository {
     return rows.map(toPayment);
   }
 
-  async listExpired(now: Date): Promise<Payment[]> {
+  async listLapsedReservations(input: { now: Date; createdBefore: Date }): Promise<Payment[]> {
     const rows = await this.db
       .select()
       .from(t.payments)
-      .where(and(eq(t.payments.status, 'pending'), lte(t.payments.expiresAt, now)));
+      .where(
+        and(
+          eq(t.payments.status, 'pending'),
+          or(
+            lte(t.payments.expiresAt, input.now),
+            and(isNull(t.payments.expiresAt), lte(t.payments.createdAt, input.createdBefore)),
+          ),
+        ),
+      );
     return rows.map(toPayment);
   }
 }

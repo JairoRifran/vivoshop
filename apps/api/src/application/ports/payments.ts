@@ -154,6 +154,22 @@ export interface PaymentProviderPort {
     providerPaymentId: string;
     sellerAccount: SellerPaymentAccount;
   }): Promise<ProviderPayment>;
+  /**
+   * Busca un pago por nuestra referencia, sin conocer el id del proveedor.
+   *
+   * Existe para una pregunta que no se puede contestar de otra forma: cuando
+   * nunca llegó un aviso, ¿es que el comprador abandonó, o es que el aviso se
+   * perdió? Sin esto habría que asumir lo primero, y asumirlo mal significa
+   * liberarle el stock a alguien que sí pagó.
+   *
+   * `null` es una respuesta legítima y frecuente: quiere decir que el
+   * proveedor no tiene ningún pago con esa referencia, o que este proveedor no
+   * sabe buscar así.
+   */
+  findPaymentByReference(input: {
+    externalReference: string;
+    sellerAccount: SellerPaymentAccount;
+  }): Promise<ProviderPayment | null>;
   /** Normaliza el cuerpo del webhook y valida su origen. */
   parseWebhook(input: {
     body: unknown;
@@ -179,8 +195,19 @@ export interface PaymentRepository {
   findByProviderPaymentId(provider: string, providerPaymentId: string): Promise<Payment | null>;
   /** Los cobros de una tienda, del mas nuevo al mas viejo. */
   listByStore(storeId: StoreId, limit?: number): Promise<Payment[]>;
-  /** Los que siguen en `pending` y ya vencieron. Los barre una tarea. */
-  listExpired(now: Date): Promise<Payment[]>;
+  /**
+   * Los que siguen en `pending` y ya se les venció la reserva.
+   *
+   * Dos casos en una consulta, porque son el mismo problema visto de dos
+   * formas: los que traen fecha del proveedor y ya la pasaron, y los que no
+   * traen ninguna y nacieron antes del corte local. El segundo es el que
+   * importa en la práctica —Checkout Pro no pone expiración— y era el que la
+   * versión anterior de este método no veía.
+   *
+   * Devuelve candidatos, no sentencias: cada uno se vuelve a mirar bajo lock
+   * antes de tocarlo.
+   */
+  listLapsedReservations(input: { now: Date; createdBefore: Date }): Promise<Payment[]>;
 }
 
 export interface SellerPaymentAccountRepository {
