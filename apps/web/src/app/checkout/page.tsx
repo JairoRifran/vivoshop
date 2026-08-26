@@ -75,11 +75,33 @@ export default async function CheckoutPage({
     ...(oferta ? { bidId: oferta } : {}),
   };
 
-  const preview = await client.orders.preview(store.id, {
-    lines: [line],
-    deliveryMethodId: firstDelivery.id,
-    installments: 1,
-  });
+  /**
+   * Si esta puja ya se compró, se va al pedido en vez de mostrar un error.
+   *
+   * Pasa sin que nadie haga nada raro: se paga, se vuelve atrás con el botón
+   * del navegador, y esta pantalla se rinde de nuevo. Antes reventaba —una
+   * pantalla de error después de una compra que salió bien, que es de las
+   * peores cosas que puede ver alguien que acaba de pagar—.
+   *
+   * `redirect` lanza, así que el destino se guarda y se salta fuera del
+   * `catch`; adentro, el propio `catch` se lo comería.
+   */
+  let preview: Awaited<ReturnType<typeof client.orders.preview>>;
+  let alreadyOrdered: string | null = null;
+  try {
+    preview = await client.orders.preview(store.id, {
+      lines: [line],
+      deliveryMethodId: firstDelivery.id,
+      installments: 1,
+    });
+  } catch (error) {
+    if (!isApiError(error) || error.code !== 'BID_ALREADY_ORDERED') throw error;
+    const orderId = error.details.orderId;
+    alreadyOrdered = typeof orderId === 'string' ? `/compras/${orderId}` : '/compras';
+    preview = null as never;
+  }
+
+  if (alreadyOrdered) redirect(alreadyOrdered);
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col bg-canvas">

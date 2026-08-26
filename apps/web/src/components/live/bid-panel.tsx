@@ -256,12 +256,25 @@ function WinnerCallout({ session }: { session: BidSessionDto }) {
           ? `Tenés ${minutes}:${seconds} para completar el pago.`
           : 'Se venció el tiempo para pagar.'}
       </p>
-      {secondsLeft > 0 ? (
+      {/*
+        Sin el id de la oferta no hay botón, y no es una sutileza de tipos.
+        Antes el enlace se armaba con `?? ''`, así que si `viewerBid` todavía no
+        había llegado —el panel se rinde por un evento del socket antes de que
+        la reconciliación traiga la oferta— el checkout se abría **sin** el
+        parámetro `oferta`. Y un checkout sin oferta cotiza a precio de
+        catálogo: quien ganó una puja de $1.100 quedaba a un toque de pagar
+        $2.490.
+
+        Esperar es la única opción correcta. `useBidSessions` consulta al
+        servidor cada diez segundos, así que el botón aparece solo; mostrarlo
+        antes sería ofrecer un precio que no es el que la persona ganó.
+      */}
+      {secondsLeft > 0 && session.viewerBid ? (
         <a
           href={
             `/checkout?producto=${session.product.id}` +
             `&variante=${session.variantId}` +
-            `&oferta=${session.viewerBid?.id ?? ''}`
+            `&oferta=${session.viewerBid.id}`
           }
           className="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-brand text-base font-extrabold text-white"
         >

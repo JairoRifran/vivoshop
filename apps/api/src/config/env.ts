@@ -153,6 +153,16 @@ const envSchema = z.object({
    * escribe con la nueva.
    */
   ENCRYPTION_KEY_PREVIOUS: z.string().optional(),
+
+  // --- Pruebas de punta a punta (M04.1) ---------------------------------
+  /**
+   * Habilita `POST /testing/reset`, que devuelve el mundo al estado sembrado.
+   *
+   * La ruta existe solo si ademas `NODE_ENV=test` y `DATA_DRIVER=memory`, asi
+   * que no hay combinacion de variables que la exponga sobre una base real.
+   * Ver `testing.controller.ts`.
+   */
+  E2E_RESET_TOKEN: z.string().optional(),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;

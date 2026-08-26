@@ -20,6 +20,7 @@ import {
 } from './modules/payments.controller';
 import { SellerController } from './modules/seller.controller';
 import { SystemController } from './modules/system.controller';
+import { TestingModule } from './modules/testing.controller';
 
 /**
  * A modular monolith: one deployable, clear internal seams.
@@ -38,6 +39,7 @@ import { SystemController } from './modules/system.controller';
     InfrastructureModule,
     RealtimeModule,
     ApplicationModule,
+    TestingModule.register(loadEnv()),
     ThrottlerModule.forRootAsync({
       inject: [ENV],
       useFactory: (env: AppEnv) => ({

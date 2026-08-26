@@ -3,6 +3,19 @@ import { defineConfig, devices } from '@playwright/test';
 const WEB_PORT = 3100;
 const API_PORT = 4100;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
+const API_URL = `http://localhost:${API_PORT}`;
+
+/**
+ * Habilita `POST /testing/reset` en la API de pruebas.
+ *
+ * Va acá y no en un `.env` porque su alcance es exactamente esta corrida: el
+ * token nace y muere con el proceso de Playwright. La ruta además exige
+ * `NODE_ENV=test` y `DATA_DRIVER=memory`, así que este valor no abre nada en
+ * ningún otro lado. Ver `testing.controller.ts`.
+ */
+const RESET_TOKEN = 'e2e-reset-token-local-only';
+
+export const E2E = { apiUrl: API_URL, resetToken: RESET_TOKEN } as const;
 
 /**
  * End-to-end smoke tests.
@@ -19,8 +32,18 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   workers: 1,
-  forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  /**
+   * Igual en todos lados, a propósito.
+   *
+   * Antes `forbidOnly` y `retries` dependían de `CI`, así que la suite podía
+   * pasar en una máquina y fallar en la otra sin que cambiara una línea de
+   * código. Peor: con un reintento, una prueba que dependía del estado que
+   * dejó otra pasaba en el segundo intento y la contaminación quedaba
+   * invisible. Si algo necesita reintentarse, es que todavía no es
+   * determinista.
+   */
+  forbidOnly: true,
+  retries: 0,
   timeout: 60_000,
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
@@ -43,6 +66,18 @@ export default defineConfig({
         '--use-fake-device-for-media-stream',
         '--use-fake-ui-for-media-stream',
         '--autoplay-policy=no-user-gesture-required',
+        /**
+         * Memoria compartida en disco en vez del `/dev/shm` por defecto.
+         *
+         * `bids.spec` abre tres navegadores a la vez —vendedora y dos
+         * compradores— y uno se moría con "Page crashed", que no es una
+         * aserción que falla sino la pestaña que desaparece. Es el modo de
+         * fallar clásico de Chromium cuando la memoria compartida se queda
+         * corta, y este flag es la mitigación que recomienda el propio
+         * proyecto. No es una espera ni un reintento: cambia dónde reserva
+         * memoria el navegador.
+         */
+        '--disable-dev-shm-usage',
       ],
     },
   },
@@ -56,7 +91,16 @@ export default defineConfig({
     {
       command: 'node ../api/dist/main.js',
       port: API_PORT,
-      reuseExistingServer: !process.env.CI,
+      /**
+       * Nunca se reutiliza un servidor.
+       *
+       * Con el driver en memoria, reutilizar significa heredar el estado de la
+       * corrida anterior. Costó una corrida en falso: un spec fallaba con
+       * "Esta puja ya tiene un pedido", que era basura vieja y no una
+       * regresión. Arrancar el proceso cuesta segundos; diagnosticar un fallo
+       * fantasma cuesta una tarde.
+       */
+      reuseExistingServer: false,
       timeout: 60_000,
       env: {
         NODE_ENV: 'test',
@@ -69,12 +113,26 @@ export default defineConfig({
         // The mock provider is what a fresh clone runs, and it is what these
         // tests exercise: no LiveKit account is needed to run the suite.
         STREAMING_PROVIDER: 'mock',
+        E2E_RESET_TOKEN: RESET_TOKEN,
       },
     },
     {
-      command: `pnpm exec next dev --webpack --port ${WEB_PORT}`,
+      /**
+       * El build, no el servidor de desarrollo.
+       *
+       * `next dev` compila cada ruta la primera vez que alguien la visita, y
+       * eso puso dos problemas en la suite: era lento —la puja, con tres
+       * navegadores, pasaba de tres minutos— y era **variable**, porque un
+       * click podía llegar mientras la pantalla todavía se compilaba. Un E2E
+       * cuyo resultado depende de cuánto tardó un compilador no prueba el
+       * producto.
+       *
+       * Contra el build, además, se prueba lo que efectivamente se despliega.
+       * Compilar cuesta una vez al principio; cada prueba se lo ahorra.
+       */
+      command: `pnpm exec next start --port ${WEB_PORT}`,
       port: WEB_PORT,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         NEXT_PUBLIC_API_URL: `http://localhost:${API_PORT}`,

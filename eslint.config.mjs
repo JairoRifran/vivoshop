@@ -119,6 +119,43 @@ export default tseslint.config(
     },
   },
 
+  // Playwright lee el patrón de destructuring para saber qué fixtures pide
+  // cada función, así que uno vacío no es descuido: es cómo se dice "ninguno".
+  // Escribirlo de otra forma rompe el runner.
+  {
+    files: ['apps/web/e2e/**/*.ts'],
+    rules: {
+      'no-empty-pattern': ['error', { allowObjectPatternsAsParameters: true }],
+    },
+  },
+
+  // Los specs de punta a punta importan `test` del fixture, no de Playwright.
+  //
+  // El fixture es lo que devuelve el mundo a su estado sembrado antes de cada
+  // prueba. Importar `test` de `@playwright/test` compila y corre igual, pero
+  // sin aislamiento: el spec hereda lo que dejó el anterior y falla —o pasa—
+  // por razones que no tienen que ver con lo que prueba. Olvidarse no puede
+  // ser una opción, así que lo agarra el lint y no la revisión.
+  {
+    files: ['apps/web/e2e/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test'],
+              message:
+                'Importá `test` de `./fixtures`: es el que reinicia el estado antes de cada prueba. ' +
+                'Los tipos (`Page`, `Browser`) sí se importan de @playwright/test.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Config files.
   {
     files: ['**/*.config.{js,mjs,cjs,ts}', '**/*.cjs', '**/scripts/**/*.{ts,mjs}'],

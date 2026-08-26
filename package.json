@@ -13,7 +13,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "pnpm --filter @vivo/api build && pnpm --filter @vivo/web test:e2e",
+    "test:e2e": "pnpm --filter @vivo/api build && pnpm --filter @vivo/web build:e2e && pnpm --filter @vivo/web test:e2e",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,css,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,css,yml,yaml}\"",
     "db:up": "docker compose up -d",

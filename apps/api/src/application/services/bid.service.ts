@@ -555,9 +555,20 @@ export class BidService {
       });
     }
     if (session.orderId) {
+      /**
+       * Código propio, y con el id del pedido adentro.
+       *
+       * No es lo mismo "esa oferta no es la aceptada" que "ya la compraste":
+       * lo primero es un error, lo segundo es alguien que volvió atrás o
+       * refrescó el checkout después de pagar. Con el mismo código, la pantalla
+       * no podía distinguirlos y mostraba un error a quien acababa de comprar
+       * bien. El id viaja porque el llamador ya demostró ser el dueño de la
+       * oferta unas líneas más arriba.
+       */
       throw new ConflictException({
-        code: 'BID_NOT_ACTIVE',
+        code: 'BID_ALREADY_ORDERED',
         message: 'Esta puja ya tiene un pedido.',
+        details: { orderId: String(session.orderId) },
       });
     }
     if (!canCheckoutBid(session, this.clock.now())) {

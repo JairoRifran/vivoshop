@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack --port 3000",
     "build": "next build",
+    "build:e2e": "node scripts/build-e2e.mjs",
     "start": "next start --port 3000",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
