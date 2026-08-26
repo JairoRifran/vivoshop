@@ -5,7 +5,7 @@
     "dockerfilePath": "apps/api/Dockerfile"
   },
   "deploy": {
-    "preDeployCommand": "node dist/infrastructure/persistence/drizzle/migrate.js && node dist/infrastructure/crypto/encrypt-tokens.js",
+    "preDeployCommand": "sh -c 'node dist/infrastructure/persistence/drizzle/migrate.js && node dist/infrastructure/crypto/encrypt-tokens.js'",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",

@@ -106,6 +106,34 @@ async function main(): Promise<void> {
     // Sin ids ni valores: solo cuántas. Un log de migración no es lugar para
     // nada que se parezca a una credencial.
     console.warn(`Cuentas: ${rows.length}. Cifradas ahora: ${sealed}. Ya cifradas: ${already}.`);
+
+    /**
+     * Y se comprueba el resultado, en vez de confiar en haberlo intentado.
+     *
+     * Esta migración ya falló una vez de la peor forma posible: en silencio.
+     * El `preDeployCommand` encadenaba dos comandos con `&&` y el segundo nunca
+     * se ejecutó —el host no pasa el comando por un shell, así que `node`
+     * recibió el resto como argumentos y los ignoró—. La migración "terminó
+     * bien", el despliegue salió verde, y los tokens seguían en claro. Nadie se
+     * enteró hasta que alguien miró la columna a mano.
+     *
+     * Un proceso que verifica lo que hizo no puede fallar así: si queda algo
+     * sin cifrar, sale distinto de cero y el despliegue se detiene.
+     */
+    const { rows: remaining } = await pool.query<{ n: string }>(
+      `select count(*)::text as n from seller_payment_accounts
+        where (access_token is not null and access_token not like 'v1.%')
+           or (refresh_token is not null and refresh_token not like 'v1.%')`,
+    );
+    const left = Number(remaining[0]?.n ?? '0');
+    if (left > 0) {
+      throw new Error(
+        `Quedaron ${left} cuentas sin cifrar. El despliegue se detiene: ` +
+          'poner esto online dejaría credenciales en texto plano.',
+      );
+    }
+
+    console.warn('Verificado: no quedan credenciales en texto plano.');
   } finally {
     await pool.end();
   }
