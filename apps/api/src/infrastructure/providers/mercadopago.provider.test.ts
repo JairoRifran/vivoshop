@@ -44,13 +44,28 @@ describe('capacidades: lo que este proveedor puede sostener', () => {
   const provider = new MercadoPagoProvider(env());
 
   it('no puede retener el dinero, y lo dice', () => {
-    // Checkout Pro liquida según el calendario de Mercado Pago. Declarar
-    // `supportsDelayedSettlement: true` sería mentir, y la UI mostraría
-    // "retenemos tu dinero hasta la entrega" sobre un mecanismo inexistente.
+    /**
+     * Esto no es una suposición: se probó contra la API de Mercado Pago.
+     *
+     * Un pago con `capture: false` en Uruguay devuelve
+     * `400 Deferred capture not supported` (código 2077), con Visa y con
+     * Mastercard. La API de Orders, que según la documentación sí admite
+     * `capture_mode: manual`, contesta 403 para esta aplicación. Sin captura
+     * diferida no hay forma de retener el dinero hasta la entrega.
+     *
+     * Declarar `true` haría que la UI prometiera "retenemos tu dinero hasta
+     * que recibas el producto" sobre un mecanismo que no existe. La medida de
+     * cuánto importa: esa promesa es lo que decide a alguien a comprarle a un
+     * desconocido por Instagram. Ver `m04-1.md` §7.
+     */
     expect(provider.capabilities().supportsDelayedSettlement).toBe(false);
+    expect(provider.capabilities().supportsManualRelease).toBe(false);
   });
 
   it('la promesa que habilita es "te lo devolvemos", no el escudo', () => {
+    // Y "te lo devolvemos" sí está verificado contra Mercado Pago real: una
+    // devolución parcial y el resto, las dos aprobadas, con el pago quedando
+    // en `refunded`. Ver `m04-1.md` §12.
     expect(protectionLevel(provider.capabilities())).toBe('refund_only');
     expect(canPromiseProtection(provider.capabilities())).toBe(false);
   });
