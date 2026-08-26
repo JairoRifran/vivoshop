@@ -77,7 +77,26 @@ export class MercadoPagoProvider implements PaymentProviderPort {
   private readonly sandbox: boolean;
 
   constructor(@Inject(ENV) private readonly env: AppEnv) {
-    this.sandbox = (env.MERCADOPAGO_ACCESS_TOKEN ?? '').startsWith('TEST-');
+    // `trim` porque un valor pegado en un panel web se lleva espacios y
+    // comillas con una facilidad asombrosa, y de ahí depende a qué host va el
+    // comprador.
+    this.sandbox = (env.MERCADOPAGO_ACCESS_TOKEN ?? '').trim().startsWith('TEST-');
+
+    /**
+     * En qué modo arrancó, dicho en voz alta.
+     *
+     * Sin esta línea, "el checkout manda al host equivocado" y "las
+     * credenciales no son las que creías" se ven exactamente igual desde
+     * afuera: el comprador ve la misma pantalla genérica de Mercado Pago y no
+     * queda rastro de por qué. Averiguarlo costó una tarde. No dice ni un
+     * pedazo de la credencial, solo de qué lado del muro está.
+     */
+    this.logger.log(
+      this.sandbox
+        ? 'Modo prueba: los cobros van a sandbox y no mueven dinero real.'
+        : 'Modo productivo: los cobros son reales.',
+    );
+
     if (!this.sandbox && !env.isProduction) {
       // Ruidoso a propósito: cobrarle de verdad a alguien que estaba probando
       // es el error caro de este milestone.

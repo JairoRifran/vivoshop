@@ -359,3 +359,48 @@ describe('el host del checkout lo decide la credencial, no el entorno', () => {
     ).toBe('https://www/checkout');
   });
 });
+
+describe('reconocer la credencial de prueba', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('tolera espacios alrededor del token', async () => {
+    // Un valor pegado en un panel web se lleva espacios con facilidad
+    // asombrosa, y de eso depende a qué host va el comprador. Fallar por un
+    // espacio invisible no deja ningún rastro que se pueda leer.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: 'pref-1',
+              init_point: 'https://www/checkout',
+              sandbox_init_point: 'https://sandbox/checkout',
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    const session = await new MercadoPagoProvider(
+      env({ isProduction: true, MERCADOPAGO_ACCESS_TOKEN: '  TEST-abc  ' }),
+    ).createCheckout({
+      paymentId: 'pay_1' as never,
+      purpose: 'order',
+      description: 'Plaza Moda — pedido VV-1',
+      currency: 'UYU',
+      grossMinor: 249_000,
+      commissionMinor: 7_470,
+      installments: 1,
+      sellerAccount: { accessToken: 'seller-token' } as never,
+      payer: { email: 'ana@ejemplo.uy', name: 'Ana' },
+      returnUrls: { success: 'https://web/ok', failure: 'https://web/no', pending: 'https://web/wait' },
+      notificationUrl: 'https://api.example.uy/payments/webhook/mercadopago',
+      externalReference: 'pay_1',
+    });
+
+    expect(session.checkoutUrl).toBe('https://sandbox/checkout');
+  });
+});
