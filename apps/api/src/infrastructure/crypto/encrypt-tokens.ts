@@ -1,5 +1,5 @@
-import { Pool } from 'pg';
 import { loadEnv } from '../../config/env';
+import { createDatabase } from '../persistence/drizzle/client';
 import { AesGcmSecretBox, SECRET_CONTEXT, loadEncryptionKeys } from './secret-box';
 
 /**
@@ -56,11 +56,18 @@ async function main(): Promise<void> {
     }),
   );
 
-  const pool = new Pool({
-    connectionString: env.DATABASE_URL,
-    ...(env.DATABASE_CA_CERT
-      ? { ssl: { ca: env.DATABASE_CA_CERT, rejectUnauthorized: true } }
-      : {}),
+  /**
+   * La misma conexión que usa la migración de esquema, no una propia.
+   *
+   * Acá había un `new Pool` con el TLS armado a mano, que ignoraba
+   * `DATABASE_SSL` — y contra Supabase eso falla. El despliegue quedó en rojo
+   * sin que el motivo fuera evidente: la migración de esquema conectaba bien y
+   * esta, dos líneas después, no. Duplicar cómo se conecta a la base es
+   * exactamente el tipo de repetición que se paga tarde.
+   */
+  const { pool } = createDatabase(env.DATABASE_URL, {
+    mode: env.DATABASE_SSL,
+    caCert: env.DATABASE_CA_CERT,
   });
 
   try {
