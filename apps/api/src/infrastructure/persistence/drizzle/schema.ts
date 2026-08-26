@@ -444,6 +444,35 @@ export const sellerPaymentAccounts = pgTable(
 );
 
 /**
+ * Navegadores suscritos a los avisos.
+ *
+ * La clave primaria es el `endpoint` porque **es** la identidad de la
+ * suscripción: el mismo navegador volviendo a suscribirse devuelve la misma
+ * URL, así que guardar es un upsert y no puede haber dos filas apuntando al
+ * mismo destino. Con un id propio, sí podría — y eso significa mandar el aviso
+ * dos veces.
+ *
+ * `on delete cascade` sobre el usuario: si la cuenta se va, sus destinos se van
+ * con ella. No hay a quién avisarle.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    endpoint: text('endpoint').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastNotifiedAt: timestamp('last_notified_at', { withTimezone: true }),
+  },
+  // El envío a los seguidores de una tienda busca por usuario, siempre.
+  (table) => [index('push_subscriptions_user_idx').on(table.userId)],
+);
+
+/**
  * El `state` anti-CSRF del OAuth.
  *
  * Sin esto cualquiera puede inducir a un vendedor a conectar la cuenta de otro
@@ -634,6 +663,7 @@ export const disputes = pgTable('disputes', {
 
 export const schema = {
   users,
+  pushSubscriptions,
   stores,
   products,
   productVariants,

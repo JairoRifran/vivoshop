@@ -181,6 +181,28 @@ const envSchema = z.object({
    * Ver `testing.controller.ts`.
    */
   E2E_RESET_TOKEN: z.string().optional(),
+
+  // --- Avisos (M05) -----------------------------------------------------
+  /**
+   * `log` escribe una linea y no molesta a nadie, que es por que es el default:
+   * un clon del repositorio arranca sin que nadie genere claves. `webpush` es
+   * el camino real.
+   */
+  NOTIFICATION_PROVIDER: z.enum(['log', 'webpush']).default('log'),
+  /**
+   * Clave publica VAPID. **Se puede publicar**: el navegador la necesita para
+   * suscribirse, asi que viaja al cliente a proposito.
+   */
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  /** Clave privada VAPID. Nunca sale del servidor. Nunca se loguea. */
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  /**
+   * A quien contactar si los avisos molestan.
+   *
+   * Los servicios de push lo exigen --un `mailto:` o una URL-- y lo usan para
+   * avisarle a un humano antes de bloquear un remitente. No es decorativo.
+   */
+  VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.uy'),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -258,6 +280,17 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     );
     if (missing.length > 0) {
       throw new Error(`STREAMING_PROVIDER=livekit requires ${missing.join(', ')}`);
+    }
+  }
+  if (env.NOTIFICATION_PROVIDER === 'webpush') {
+    const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter(
+      (key) => !env[key],
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `NOTIFICATION_PROVIDER=webpush requires ${missing.join(', ')}. ` +
+          'Generalas con: pnpm --filter @vivo/api exec web-push generate-vapid-keys',
+      );
     }
   }
   if (env.PAYMENT_PROVIDER === 'mercadopago') {

@@ -12,6 +12,7 @@ import type {
   Order,
   Payment,
   Product,
+  PushSubscription,
   SellerPaymentAccount,
   Store,
   User,
@@ -53,6 +54,8 @@ export class MemoryDatabase {
   readonly liveMessages = new Map<string, LiveMessage>();
   readonly orders = new Map<string, Order>();
   readonly follows = new Map<string, Follow>();
+  /** Navegadores suscritos, por endpoint. Ver `PushSubscription`. */
+  readonly pushSubscriptions = new Map<string, PushSubscription>();
   readonly idempotency = new Map<string, IdempotencyRecord>();
   readonly analytics: StoredAnalyticsEvent[] = [];
 
@@ -128,6 +131,7 @@ export class MemoryDatabase {
     this.liveMessages.clear();
     this.orders.clear();
     this.follows.clear();
+    this.pushSubscriptions.clear();
     this.idempotency.clear();
     this.analytics.length = 0;
     this.payments.clear();

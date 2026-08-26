@@ -12,6 +12,7 @@ import type {
   StoreId,
   User,
   UserId,
+  PushSubscription,
 } from '@vivo/domain';
 import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type {
@@ -29,6 +30,7 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
 import { DRIZZLE, type VivoDatabase } from './client';
 import {
@@ -457,7 +459,10 @@ export class DrizzleFollowRepository implements FollowRepository {
     const rows = await this.db
       .select({ userId: t.follows.userId })
       .from(t.follows)
-      .where(eq(t.follows.storeId, String(storeId)));
+      // `notifyOnLive` estaba en el dominio desde M01 y esta consulta lo
+      // ignoraba. Mientras no se enviaba nada daba igual; con avisos de verdad,
+      // mandarle a quien lo apagó es la forma más rápida de que apague todo.
+      .where(and(eq(t.follows.storeId, String(storeId)), eq(t.follows.notifyOnLive, true)));
     return rows.map((row) => row.userId as UserId);
   }
 
@@ -480,6 +485,13 @@ export class DrizzleFollowRepository implements FollowRepository {
       })
       // Following twice is a no-op, not a constraint violation.
       .onConflictDoNothing();
+  }
+
+  async setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void> {
+    await this.db
+      .update(t.follows)
+      .set({ notifyOnLive: notify })
+      .where(and(eq(t.follows.userId, String(userId)), eq(t.follows.storeId, String(storeId))));
   }
 
   async remove(userId: UserId, storeId: StoreId): Promise<void> {
@@ -512,4 +524,101 @@ export class DrizzleAnalyticsRepository implements AnalyticsRepository {
       );
     return row?.total ?? 0;
   }
+}
+
+
+/**
+ * Los navegadores suscritos, en PostgreSQL.
+ *
+ * Guardar es siempre un upsert sobre el `endpoint`: el mismo navegador
+ * volviendo a suscribirse actualiza su fila. Si fuera un insert, dos
+ * suscripciones del mismo destino significarían dos avisos por vivo.
+ */
+@Injectable()
+export class DrizzlePushSubscriptionRepository implements PushSubscriptionRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async save(subscription: PushSubscription): Promise<void> {
+    const values = {
+      endpoint: subscription.endpoint,
+      userId: String(subscription.userId),
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+      userAgent: subscription.userAgent,
+      createdAt: subscription.createdAt,
+      lastNotifiedAt: subscription.lastNotifiedAt,
+    };
+
+    await this.db
+      .insert(t.pushSubscriptions)
+      .values(values)
+      .onConflictDoUpdate({
+        target: t.pushSubscriptions.endpoint,
+        // `createdAt` no se pisa: la fila es la misma suscripción, no una nueva.
+        // Y el `userId` sí, porque un navegador compartido puede cambiar de
+        // dueño y el aviso tiene que seguir a quien está usándolo ahora.
+        set: {
+          userId: values.userId,
+          p256dh: values.p256dh,
+          auth: values.auth,
+          userAgent: values.userAgent,
+        },
+      });
+  }
+
+  async listForUsers(userIds: readonly UserId[]): Promise<PushSubscription[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(t.pushSubscriptions)
+      .where(inArray(t.pushSubscriptions.userId, userIds.map(String)));
+    return rows.map(toPushSubscription);
+  }
+
+  async listForUser(userId: UserId): Promise<PushSubscription[]> {
+    const rows = await this.db
+      .select()
+      .from(t.pushSubscriptions)
+      .where(eq(t.pushSubscriptions.userId, String(userId)));
+    return rows.map(toPushSubscription);
+  }
+
+  async remove(endpoint: string): Promise<void> {
+    await this.db.delete(t.pushSubscriptions).where(eq(t.pushSubscriptions.endpoint, endpoint));
+  }
+
+  async removeMany(endpoints: readonly string[]): Promise<void> {
+    if (endpoints.length === 0) return;
+    await this.db
+      .delete(t.pushSubscriptions)
+      .where(inArray(t.pushSubscriptions.endpoint, [...endpoints]));
+  }
+
+  async markNotified(endpoints: readonly string[], at: Date): Promise<void> {
+    if (endpoints.length === 0) return;
+    await this.db
+      .update(t.pushSubscriptions)
+      .set({ lastNotifiedAt: at })
+      .where(inArray(t.pushSubscriptions.endpoint, [...endpoints]));
+  }
+}
+
+function toPushSubscription(row: {
+  endpoint: string;
+  userId: string;
+  p256dh: string;
+  auth: string;
+  userAgent: string | null;
+  createdAt: Date;
+  lastNotifiedAt: Date | null;
+}): PushSubscription {
+  return {
+    endpoint: row.endpoint,
+    userId: row.userId as UserId,
+    p256dh: row.p256dh,
+    auth: row.auth,
+    userAgent: row.userAgent,
+    createdAt: row.createdAt,
+    lastNotifiedAt: row.lastNotifiedAt,
+  };
 }

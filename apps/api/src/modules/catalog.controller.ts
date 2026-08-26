@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { asProductId, asStoreId, type StoreCategory } from '@vivo/domain';
+import { z } from 'zod';
 import {
   createStoreRequestSchema,
   type CreateStoreRequest,
@@ -81,6 +82,28 @@ export class StoresController {
     @Param('storeId') storeId: string,
   ): Promise<{ following: boolean }> {
     return this.stores.follow(requireUser(user).id, asStoreId(storeId));
+  }
+
+  /**
+   * La preferencia de aviso, separada de seguir.
+   *
+   * Seguir una tienda y querer que te interrumpan cuando transmite son dos
+   * decisiones distintas, y esta ruta existe para poder cambiar la segunda sin
+   * tocar la primera. Sin ella, apagar los avisos de una tienda obligaba a
+   * dejar de seguirla.
+   */
+  @Put(':storeId/follow/notifications')
+  setLiveNotifications(
+    @CurrentUser() user: AuthenticatedUser | null,
+    @Param('storeId') storeId: string,
+    @Body(zodPipe(z.object({ notifyOnLive: z.boolean() })))
+    body: { notifyOnLive: boolean },
+  ): Promise<{ notifyOnLive: boolean }> {
+    return this.stores.setLiveNotifications(
+      requireUser(user).id,
+      asStoreId(storeId),
+      body.notifyOnLive,
+    );
   }
 
   @Delete(':storeId/follow')

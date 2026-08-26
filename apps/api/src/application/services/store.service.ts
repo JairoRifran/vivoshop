@@ -149,6 +149,29 @@ export class StoreService {
     return toStoreDetailDto(updated);
   }
 
+  /**
+   * Enciende o apaga el aviso de "salió al aire" para una tienda que ya se sigue.
+   *
+   * Existe porque sin esto `notifyOnLive` era decorativo: se guardaba en `true`
+   * al seguir y nada podía cambiarlo. Un aviso que no se puede apagar no es una
+   * preferencia, es una imposición — y la única salida que le queda a la
+   * persona es revocar el permiso del navegador, que se lleva puestos también
+   * los avisos de todas las demás tiendas.
+   */
+  async setLiveNotifications(
+    userId: UserId,
+    storeId: StoreId,
+    notify: boolean,
+  ): Promise<{ notifyOnLive: boolean }> {
+    await this.requireById(storeId);
+    if (!(await this.follows.exists(userId, storeId))) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'No seguís esa tienda.' });
+    }
+
+    await this.follows.setNotifyOnLive(userId, storeId, notify);
+    return { notifyOnLive: notify };
+  }
+
   async follow(userId: UserId, storeId: StoreId): Promise<{ following: boolean }> {
     const store = await this.requireById(storeId);
     if (await this.follows.exists(userId, storeId)) return { following: true };

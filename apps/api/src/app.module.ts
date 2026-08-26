@@ -19,6 +19,7 @@ import {
   VerificationController,
 } from './modules/payments.controller';
 import { SellerController } from './modules/seller.controller';
+import { NotificationsController } from './modules/notifications.controller';
 import { SystemController } from './modules/system.controller';
 import { TestingModule } from './modules/testing.controller';
 
@@ -49,6 +50,7 @@ import { TestingModule } from './modules/testing.controller';
   ],
   controllers: [
     SystemController,
+    NotificationsController,
     AuthController,
     StoresController,
     ProductsController,

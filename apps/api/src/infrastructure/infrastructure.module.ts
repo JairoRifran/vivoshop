@@ -8,6 +8,8 @@ import {
   SHIPPING_PROVIDER,
   STORAGE_PROVIDER,
   STREAMING_PROVIDER,
+  CLOCK,
+  PUSH_SUBSCRIPTION_REPOSITORY,
 } from '../application/ports/tokens';
 import { PAYMENT_PROVIDER_PORT } from '../application/ports/payments';
 import { MemoryCacheStore } from './cache/memory-cache';
@@ -21,6 +23,9 @@ import {
 import { LiveKitStreamingProvider } from './providers/livekit.provider';
 import { FakePaymentProvider } from './providers/fake-payment.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
+import type { Clock } from '../application/ports/infrastructure';
+import type { PushSubscriptionRepository } from '../application/ports/repositories';
+import { WebPushNotificationProvider } from './providers/web-push.provider';
 import {
   FlatRateShippingProvider,
   LocalStorageProvider,
@@ -75,6 +80,7 @@ const externalProviders: Provider[] = [
       env.PAYMENT_PROVIDER === 'mercadopago' ? new MercadoPagoProvider(env) : fake,
   },
   MockStreamingProvider,
+  LogNotificationProvider,
   {
     // Chosen by configuration, not by build. `mock` is the default so a fresh
     // clone runs with no LiveKit account and no Docker; `livekit` requires the
@@ -85,7 +91,26 @@ const externalProviders: Provider[] = [
     useFactory: (env: AppEnv, mock: MockStreamingProvider) =>
       env.STREAMING_PROVIDER === 'livekit' ? new LiveKitStreamingProvider(env) : mock,
   },
-  { provide: NOTIFICATION_PROVIDER, useClass: LogNotificationProvider },
+  {
+    /**
+     * `log` por defecto para que un clon del repositorio arranque sin que nadie
+     * genere claves VAPID, y `webpush` cuando hay con qué. Es el mismo patrón
+     * que el streaming y los cobros: el default no necesita credenciales, y
+     * `env.ts` valida las que hacen falta al arrancar en vez de dejar que falle
+     * el primer envío.
+     */
+    provide: NOTIFICATION_PROVIDER,
+    inject: [ENV, PUSH_SUBSCRIPTION_REPOSITORY, CLOCK, LogNotificationProvider],
+    useFactory: (
+      env: AppEnv,
+      subscriptions: PushSubscriptionRepository,
+      clock: Clock,
+      log: LogNotificationProvider,
+    ) =>
+      env.NOTIFICATION_PROVIDER === 'webpush'
+        ? new WebPushNotificationProvider(env, subscriptions, clock)
+        : log,
+  },
   { provide: SHIPPING_PROVIDER, useClass: FlatRateShippingProvider },
   { provide: STORAGE_PROVIDER, useClass: LocalStorageProvider },
 ];

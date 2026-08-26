@@ -12,6 +12,7 @@ import { ENV, loadEnv, type AppEnv } from '../../config/env';
 import {
   ANALYTICS_REPOSITORY,
   FOLLOW_REPOSITORY,
+  PUSH_SUBSCRIPTION_REPOSITORY,
   LIVE_REPOSITORY,
   MESSAGE_REPOSITORY,
   ORDER_REPOSITORY,
@@ -53,6 +54,7 @@ import {
 import {
   DrizzleAnalyticsRepository,
   DrizzleFollowRepository,
+  DrizzlePushSubscriptionRepository,
   DrizzleLiveRepository,
   DrizzleMessageRepository,
   DrizzleOrderRepository,
@@ -66,6 +68,7 @@ import { MemoryOrderTransactionRunner } from './memory/memory.order-transaction'
 import {
   MemoryAnalyticsRepository,
   MemoryFollowRepository,
+  MemoryPushSubscriptionRepository,
   MemoryLiveRepository,
   MemoryMessageRepository,
   MemoryOrderRepository,
@@ -76,6 +79,7 @@ import {
 
 const REPOSITORY_TOKENS = [
   USER_REPOSITORY,
+  PUSH_SUBSCRIPTION_REPOSITORY,
   STORE_REPOSITORY,
   PRODUCT_REPOSITORY,
   LIVE_REPOSITORY,
@@ -113,6 +117,7 @@ const POOL = Symbol('PgPool');
     { provide: MESSAGE_REPOSITORY, useClass: MemoryMessageRepository },
     { provide: ORDER_REPOSITORY, useClass: MemoryOrderRepository },
     { provide: FOLLOW_REPOSITORY, useClass: MemoryFollowRepository },
+    { provide: PUSH_SUBSCRIPTION_REPOSITORY, useClass: MemoryPushSubscriptionRepository },
     { provide: ANALYTICS_REPOSITORY, useClass: MemoryAnalyticsRepository },
     { provide: ORDER_TRANSACTION_RUNNER, useClass: MemoryOrderTransactionRunner },
     { provide: PAYMENT_REPOSITORY, useClass: MemoryPaymentRepository },
@@ -197,6 +202,7 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: MESSAGE_REPOSITORY, useClass: DrizzleMessageRepository },
     { provide: ORDER_REPOSITORY, useClass: DrizzleOrderRepository },
     { provide: FOLLOW_REPOSITORY, useClass: DrizzleFollowRepository },
+    { provide: PUSH_SUBSCRIPTION_REPOSITORY, useClass: DrizzlePushSubscriptionRepository },
     { provide: ANALYTICS_REPOSITORY, useClass: DrizzleAnalyticsRepository },
     { provide: ORDER_TRANSACTION_RUNNER, useClass: DrizzleOrderTransactionRunner },
     { provide: PAYMENT_REPOSITORY, useClass: DrizzlePaymentRepository },

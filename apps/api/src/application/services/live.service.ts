@@ -332,6 +332,22 @@ export class LiveService {
     }
 
     const now = this.clock.now();
+    /**
+     * Un vivo se anuncia una sola vez.
+     *
+     * Hoy esta condición no cambia nada: una reconexión vuelve por
+     * `markResumed`, que no anuncia, y las transiciones no admiten volver a
+     * `starting` desde `live`. Es una guarda, no la corrección de un error
+     * existente, y se dice así para no atribuirle un mérito que no tiene.
+     *
+     * Existe igual porque el costo de equivocarse es asimétrico. El permiso de
+     * avisos se pierde una sola vez: quien recibe tres notificaciones del mismo
+     * vivo no silencia ese vivo, silencia la aplicación, y no se recupera. Una
+     * línea que ata el anuncio al primer arranque cuesta menos que descubrir
+     * por qué la gente dejó de recibir avisos.
+     */
+    const firstStart = session.startedAt === null;
+
     const updated = await this.sessions.update({
       ...starting,
       status: 'live',
@@ -342,7 +358,7 @@ export class LiveService {
     });
 
     await this.publishState(updated);
-    await this.announce(updated, store);
+    if (firstStart) await this.announce(updated, store);
     this.log.log('live.started', String(id), {
       storeId: String(store.id),
       provider: channel.provider,
@@ -729,6 +745,16 @@ export class LiveService {
     return hydrated.filter((dto): dto is LiveSummaryDto => dto !== null);
   }
 
+  /**
+   * Le avisa a los seguidores que la tienda salió al aire.
+   *
+   * `listFollowerIds` devuelve solo a quienes tienen el aviso encendido — la
+   * distinción vive en el repositorio y no acá, porque es una condición de
+   * "a quién traer" y no de "qué hacer con ellos".
+   *
+   * Nunca tira: si el servicio de avisos está caído, el vivo empieza igual. Lo
+   * que se pierde es una notificación, no una transmisión.
+   */
   private async announce(session: LiveSession, store: Store): Promise<void> {
     const followers = await this.follows.listFollowerIds(store.id);
     if (followers.length === 0) return;

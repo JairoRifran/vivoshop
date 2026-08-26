@@ -14,6 +14,7 @@ import type {
   StoreId,
   User,
   UserId,
+  PushSubscription,
 } from '@vivo/domain';
 import type {
   AnalyticsRepository,
@@ -30,6 +31,7 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
 import { MemoryDatabase } from './memory-database';
 
@@ -286,7 +288,8 @@ export class MemoryFollowRepository implements FollowRepository {
 
   async listFollowerIds(storeId: StoreId): Promise<UserId[]> {
     return [...this.db.follows.values()]
-      .filter((follow) => follow.storeId === storeId)
+      // Igual que el driver de postgres: solo quienes quieren enterarse.
+      .filter((follow) => follow.storeId === storeId && follow.notifyOnLive)
       .map((follow) => follow.userId);
   }
 
@@ -303,6 +306,12 @@ export class MemoryFollowRepository implements FollowRepository {
       MemoryDatabase.followKey(String(follow.userId), String(follow.storeId)),
       follow,
     );
+  }
+
+  async setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void> {
+    const key = MemoryDatabase.followKey(String(userId), String(storeId));
+    const existing = this.db.follows.get(key);
+    if (existing) this.db.follows.set(key, { ...existing, notifyOnLive: notify });
   }
 
   async remove(userId: UserId, storeId: StoreId): Promise<void> {
@@ -328,5 +337,47 @@ export class MemoryAnalyticsRepository implements AnalyticsRepository {
     return this.db.analytics.filter(
       (event) => event.name === name && event.occurredAt >= since,
     ).length;
+  }
+}
+
+
+/** Los navegadores suscritos, en memoria. Misma semántica de upsert. */
+@Injectable()
+export class MemoryPushSubscriptionRepository implements PushSubscriptionRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async save(subscription: PushSubscription): Promise<void> {
+    const existing = this.db.pushSubscriptions.get(subscription.endpoint);
+    // `createdAt` se conserva: es la misma suscripción, no una nueva.
+    this.db.pushSubscriptions.set(subscription.endpoint, {
+      ...subscription,
+      createdAt: existing?.createdAt ?? subscription.createdAt,
+    });
+  }
+
+  async listForUsers(userIds: readonly UserId[]): Promise<PushSubscription[]> {
+    const wanted = new Set(userIds.map(String));
+    return [...this.db.pushSubscriptions.values()].filter((entry) =>
+      wanted.has(String(entry.userId)),
+    );
+  }
+
+  async listForUser(userId: UserId): Promise<PushSubscription[]> {
+    return [...this.db.pushSubscriptions.values()].filter((entry) => entry.userId === userId);
+  }
+
+  async remove(endpoint: string): Promise<void> {
+    this.db.pushSubscriptions.delete(endpoint);
+  }
+
+  async removeMany(endpoints: readonly string[]): Promise<void> {
+    for (const endpoint of endpoints) this.db.pushSubscriptions.delete(endpoint);
+  }
+
+  async markNotified(endpoints: readonly string[], at: Date): Promise<void> {
+    for (const endpoint of endpoints) {
+      const entry = this.db.pushSubscriptions.get(endpoint);
+      if (entry) this.db.pushSubscriptions.set(endpoint, { ...entry, lastNotifiedAt: at });
+    }
   }
 }

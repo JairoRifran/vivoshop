@@ -2,19 +2,20 @@ import type {
   Follow,
   LiveMessage,
   LiveSession,
+  LiveSessionId,
   LiveStatus,
   Order,
+  OrderId,
   OrderStatus,
   Product,
+  ProductId,
   ProductStatus,
+  PushSubscription,
   Store,
   StoreCategory,
+  StoreId,
   User,
   UserId,
-  StoreId,
-  ProductId,
-  LiveSessionId,
-  OrderId,
 } from '@vivo/domain';
 
 /**
@@ -106,11 +107,44 @@ export interface OrderRepository {
 export interface FollowRepository {
   exists(userId: UserId, storeId: StoreId): Promise<boolean>;
   listStoreIds(userId: UserId): Promise<StoreId[]>;
-  /** Everyone following a store, used to announce that it went live. */
+  /**
+   * Quiénes quieren enterarse de que la tienda salió al aire.
+   *
+   * Devuelve **solo** a quienes tienen `notifyOnLive`. La distinción existía en
+   * el dominio desde M01 y los dos drivers la ignoraban: mientras nada se
+   * enviaba, daba igual. Con avisos de verdad, no — mandarle a alguien que
+   * apagó el aviso es la forma más rápida de que apague la app entera.
+   */
   listFollowerIds(storeId: StoreId): Promise<UserId[]>;
   countFollowers(storeId: StoreId): Promise<number>;
   add(follow: Follow): Promise<void>;
+  /**
+   * Enciende o apaga el aviso de "salió al aire" para un seguidor.
+   *
+   * Separado de `add` porque son dos intenciones distintas: seguir una tienda y
+   * querer que te interrumpan cuando transmite. Mezclarlas obligaría a mandar
+   * la preferencia en cada `follow`, y a decidir qué pasa cuando no viene.
+   */
+  setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void>;
   remove(userId: UserId, storeId: StoreId): Promise<void>;
+}
+
+/**
+ * Dónde viven los navegadores suscritos.
+ *
+ * La identidad es el `endpoint`, así que guardar es siempre un upsert: el mismo
+ * navegador volviendo a suscribirse actualiza su fila en vez de crear otra. Ver
+ * `PushSubscription` en el dominio.
+ */
+export interface PushSubscriptionRepository {
+  save(subscription: PushSubscription): Promise<void>;
+  /** Los destinos de un conjunto de personas, para un envío en lote. */
+  listForUsers(userIds: readonly UserId[]): Promise<PushSubscription[]>;
+  listForUser(userId: UserId): Promise<PushSubscription[]>;
+  /** La baja limpia: se llama cuando el servicio de push dice que ya no existe. */
+  remove(endpoint: string): Promise<void>;
+  removeMany(endpoints: readonly string[]): Promise<void>;
+  markNotified(endpoints: readonly string[], at: Date): Promise<void>;
 }
 
 export interface StoredAnalyticsEvent {
