@@ -3,9 +3,12 @@ import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { asOrderId, asProductId, asStoreId, asUserId, buildOrderCode } from '@vivo/domain';
 import { buildDemoDataset } from '@vivo/seed';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { developmentSecretBox } from '../../crypto/secret-box';
 import type { VivoDatabase } from './client';
+import { DrizzleSellerPaymentAccountRepository } from './drizzle.payments';
 import {
   DrizzleAnalyticsRepository,
   DrizzleFollowRepository,
@@ -309,5 +312,78 @@ describe('analytics', () => {
       0,
     );
     expect(await analytics.countByName('nope', earlier)).toBe(0);
+  });
+});
+
+/**
+ * Que el cifrado llegue de verdad hasta la tabla.
+ *
+ * Las pruebas de `secret-box.test.ts` prueban el cifrado; esta prueba la otra
+ * mitad, que es la que se puede olvidar: que el repositorio lo use. Un mapper
+ * al que nadie le pasa la caja compila igual y deja los tokens en claro sin
+ * que nada falle, así que la afirmación fuerte es sobre la **columna**, leída
+ * en crudo y sin pasar por el mapper.
+ */
+describe('credenciales del vendedor en reposo', () => {
+  const ACCESS = 'APP_USR-token-de-acceso-que-cobra-plata';
+  const REFRESH = 'TG-refresh-token-del-vendedor';
+
+  async function connect() {
+    const accounts = new DrizzleSellerPaymentAccountRepository(db, developmentSecretBox());
+    const [store] = await db.select().from(schema.stores).limit(1);
+    const storeId = asStoreId(store?.id ?? '');
+
+    await accounts.save({
+      storeId,
+      provider: 'mercadopago',
+      status: 'connected',
+      externalAccountId: '3644080714',
+      externalAccountLabel: null,
+      accessToken: ACCESS,
+      refreshToken: REFRESH,
+      expiresAt: null,
+      connectedAt: NOW,
+      updatedAt: NOW,
+    });
+
+    return { accounts, storeId };
+  }
+
+  it('la columna no contiene el token', async () => {
+    const { storeId } = await connect();
+
+    const [row] = await db
+      .select()
+      .from(schema.sellerPaymentAccounts)
+      .where(eq(schema.sellerPaymentAccounts.storeId, String(storeId)));
+
+    expect(row?.accessToken).not.toBe(ACCESS);
+    expect(row?.accessToken).not.toContain('APP_USR');
+    expect(row?.accessToken?.startsWith('v1.')).toBe(true);
+    expect(row?.refreshToken).not.toBe(REFRESH);
+    expect(row?.refreshToken?.startsWith('v1.')).toBe(true);
+  });
+
+  it('el repositorio los devuelve utilizables', async () => {
+    // El proveedor necesita el token en claro para armar un `Authorization`.
+    // Cifrar sin poder volver no serviría de nada.
+    const { accounts, storeId } = await connect();
+    const account = await accounts.find(storeId, 'mercadopago');
+
+    expect(account?.accessToken).toBe(ACCESS);
+    expect(account?.refreshToken).toBe(REFRESH);
+  });
+
+  it('lo que quedó en claro de antes se sigue leyendo', async () => {
+    // Desplegar el cifrado no puede romper una tienda ya conectada: los
+    // valores viejos se leen tal cual hasta que la migración los reescriba.
+    const { accounts, storeId } = await connect();
+    await db
+      .update(schema.sellerPaymentAccounts)
+      .set({ accessToken: ACCESS, refreshToken: null })
+      .where(eq(schema.sellerPaymentAccounts.storeId, String(storeId)));
+
+    const account = await accounts.find(storeId, 'mercadopago');
+    expect(account?.accessToken).toBe(ACCESS);
   });
 });

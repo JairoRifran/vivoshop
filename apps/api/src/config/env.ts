@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { loadEncryptionKeys } from '../infrastructure/crypto/secret-box';
 
 /**
  * Loads `.env` from the repository root, then from this app, without adding a
@@ -132,6 +133,26 @@ const envSchema = z.object({
    * repartido por el codigo seria el problema.
    */
   BID_RESERVATION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+
+  // --- Cifrado en reposo (M04.1) ----------------------------------------
+  /**
+   * Clave de cifrado de credenciales de terceros, 32 bytes en base64.
+   *
+   * Solo por entorno: nunca en el repositorio, nunca derivada de otra cosa que
+   * pueda adivinarse. Obligatoria en produccion —sin ella los tokens de los
+   * vendedores quedarian en texto plano— y con una clave de desarrollo fuera
+   * de produccion para que el camino de cifrado se ejecute igual en las
+   * pruebas. Ver `secret-box.ts`.
+   */
+  ENCRYPTION_KEY: z.string().optional(),
+  /**
+   * La clave anterior, mientras dure una rotacion. Solo descifra.
+   *
+   * Poner la nueva en `ENCRYPTION_KEY` y la vieja aca permite rotar sin
+   * ventana de indisponibilidad: lo ya escrito se sigue leyendo y lo nuevo se
+   * escribe con la nueva.
+   */
+  ENCRYPTION_KEY_PREVIOUS: z.string().optional(),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -222,6 +243,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.startsWith('dev-only')) {
     throw new Error('Refusing to start in production with the development JWT_SECRET');
   }
+  // Se valida acá, al arrancar, y no la primera vez que un vendedor conecta su
+  // cuenta: un error de configuración tiene que aparecer en el despliegue, no
+  // en la cara de quien está intentando cobrar.
+  loadEncryptionKeys({
+    ...(env.ENCRYPTION_KEY ? { ENCRYPTION_KEY: env.ENCRYPTION_KEY } : {}),
+    ...(env.ENCRYPTION_KEY_PREVIOUS
+      ? { ENCRYPTION_KEY_PREVIOUS: env.ENCRYPTION_KEY_PREVIOUS }
+      : {}),
+    isProduction: env.NODE_ENV === 'production',
+  });
   // Una suite de pruebas no tiene nada que hacer contra una base remota. Esto
   // no es teórico: con un `.env` apuntando a Supabase, `pnpm test` escribió
   // datos de prueba en la base desplegada y pasó en verde. Falla ruidosamente

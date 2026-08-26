@@ -18,6 +18,9 @@ const PRODUCTION: NodeJS.ProcessEnv = {
   ...BASE,
   NODE_ENV: 'production',
   JWT_SECRET: 'production-secret-value-000000000000',
+  // Obligatoria en producción desde M04.1: sin ella los tokens de los
+  // vendedores quedarían en texto plano y el proceso no arranca.
+  ENCRYPTION_KEY: Buffer.alloc(32, 'k').toString('base64'),
 };
 
 const SHA = 'cd206a699103e727f7929f0279f09e8b96cf6e58';
@@ -106,5 +109,26 @@ describe('no se expone ninguna otra variable', () => {
     const publicado = JSON.stringify(env);
     expect(publicado).not.toContain('api.railway.internal');
     expect(publicado).not.toContain('proj_secreto');
+  });
+});
+
+describe('la clave de cifrado', () => {
+  it('en producción es obligatoria, y falla al arrancar', () => {
+    // Descubrir esto la primera vez que un vendedor conecta su cuenta sería
+    // tarde: ya habría un token escrito en claro.
+    const { ENCRYPTION_KEY: _omitida, ...sinClave } = PRODUCTION;
+    expect(() => loadEnv(sinClave)).toThrow(/Falta ENCRYPTION_KEY/);
+  });
+
+  it('fuera de producción no hace falta', () => {
+    // Un clon del repositorio tiene que arrancar sin que nadie entregue
+    // secretos; el cifrado usa una clave de desarrollo que no protege nada.
+    expect(() => loadEnv(BASE)).not.toThrow();
+  });
+
+  it('una clave mal formada se rechaza con un mensaje que dice cómo generarla', () => {
+    expect(() => loadEnv({ ...PRODUCTION, ENCRYPTION_KEY: 'demasiado-corta' })).toThrow(
+      /32 bytes/,
+    );
   });
 });

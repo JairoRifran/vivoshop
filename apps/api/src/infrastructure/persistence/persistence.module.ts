@@ -60,6 +60,7 @@ import {
   DrizzleStoreRepository,
   DrizzleUserRepository,
 } from './drizzle/drizzle.repositories';
+import { AesGcmSecretBox, SECRET_BOX, loadEncryptionKeys } from '../crypto/secret-box';
 import { MemoryDatabase } from './memory/memory-database';
 import { MemoryOrderTransactionRunner } from './memory/memory.order-transaction';
 import {
@@ -166,6 +167,28 @@ export class MemoryPersistenceModule implements OnModuleInit {
       provide: DRIZZLE,
       inject: [POOL],
       useFactory: (created: { db: unknown }) => created.db,
+    },
+    /**
+     * El cifrado de credenciales vive solo en el driver de postgres.
+     *
+     * No es un descuido: "en reposo" quiere decir escrito en un disco que
+     * alguien puede copiar. El driver en memoria no escribe nada —muere con el
+     * proceso— así que cifrarlo no protegería de nada y solo agregaría una
+     * pieza donde no hace falta.
+     */
+    {
+      provide: SECRET_BOX,
+      inject: [ENV],
+      useFactory: (env: AppEnv) =>
+        new AesGcmSecretBox(
+          loadEncryptionKeys({
+            ...(env.ENCRYPTION_KEY ? { ENCRYPTION_KEY: env.ENCRYPTION_KEY } : {}),
+            ...(env.ENCRYPTION_KEY_PREVIOUS
+              ? { ENCRYPTION_KEY_PREVIOUS: env.ENCRYPTION_KEY_PREVIOUS }
+              : {}),
+            isProduction: env.isProduction,
+          }),
+        ),
     },
     { provide: USER_REPOSITORY, useClass: DrizzleUserRepository },
     { provide: STORE_REPOSITORY, useClass: DrizzleStoreRepository },

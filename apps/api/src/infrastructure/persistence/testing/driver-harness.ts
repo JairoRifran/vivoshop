@@ -9,6 +9,7 @@ import { BidService } from '../../../application/services/bid.service';
 import { CheckoutService } from '../../../application/services/checkout.service';
 import type { LiveService } from '../../../application/services/live.service';
 import { PaymentService } from '../../../application/services/payment.service';
+import { developmentSecretBox } from '../../crypto/secret-box';
 import { NoopRealtimePublisher } from '../../realtime/realtime.module';
 import type { OrderTransactionRunner } from '../../../application/ports/order-transaction';
 import type {
@@ -354,7 +355,7 @@ export async function createPgliteHarness(): Promise<DriverHarness> {
     runner: faults,
     stores,
     paymentRepo: new DrizzlePaymentRepository(db),
-    accounts: new DrizzleSellerPaymentAccountRepository(db),
+    accounts: new DrizzleSellerPaymentAccountRepository(db, developmentSecretBox()),
     oauthStates: new DrizzleOAuthStateRepository(db),
     paymentRunner: new DrizzlePaymentTransactionRunner(db),
     bidRepo: new DrizzleBidRepository(db),

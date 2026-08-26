@@ -22,6 +22,7 @@ import type {
   SellerPaymentAccountRepository,
   VerificationRepository,
 } from '../../../application/ports/payments';
+import { SECRET_BOX, type SecretBox } from '../../crypto/secret-box';
 import { DRIZZLE, type VivoDatabase } from './client';
 import { toOrder } from './mappers';
 import {
@@ -114,7 +115,10 @@ export class DrizzlePaymentRepository implements PaymentRepository {
 
 @Injectable()
 export class DrizzleSellerPaymentAccountRepository implements SellerPaymentAccountRepository {
-  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: VivoDatabase,
+    @Inject(SECRET_BOX) private readonly secrets: SecretBox,
+  ) {}
 
   async find(storeId: StoreId, provider: string): Promise<SellerPaymentAccount | null> {
     const [row] = await this.db
@@ -127,7 +131,7 @@ export class DrizzleSellerPaymentAccountRepository implements SellerPaymentAccou
         ),
       )
       .limit(1);
-    return row ? toAccount(row) : null;
+    return row ? toAccount(row, this.secrets) : null;
   }
 
   async findByExternalId(
@@ -144,11 +148,11 @@ export class DrizzleSellerPaymentAccountRepository implements SellerPaymentAccou
         ),
       )
       .limit(1);
-    return row ? toAccount(row) : null;
+    return row ? toAccount(row, this.secrets) : null;
   }
 
   async save(account: SellerPaymentAccount): Promise<SellerPaymentAccount> {
-    const values = fromAccount(account);
+    const values = fromAccount(account, this.secrets);
     await this.db
       .insert(t.sellerPaymentAccounts)
       .values(values)

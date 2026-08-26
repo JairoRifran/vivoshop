@@ -15,6 +15,7 @@ import {
   asVerificationId,
 } from '@vivo/domain';
 import type { InferSelectModel } from 'drizzle-orm';
+import { SECRET_CONTEXT, type SecretBox } from '../../crypto/secret-box';
 import type {
   businessVerifications,
   disputes,
@@ -99,30 +100,39 @@ export function fromPayment(payment: Payment) {
   };
 }
 
-export function toAccount(row: AccountRow): SellerPaymentAccount {
+/**
+ * La cuenta de cobro, con los tokens descifrados.
+ *
+ * El cifrado vive exactamente acá, en el borde de la persistencia: adentro del
+ * dominio los tokens son texto plano —el proveedor necesita mandarlos en un
+ * `Authorization`— y en la base son texto cifrado. Ningún servicio, ninguna
+ * entidad y ningún caso de uso se entera, que es la razón de que el cambio
+ * quepa en dos funciones.
+ */
+export function toAccount(row: AccountRow, secrets: SecretBox): SellerPaymentAccount {
   return {
     storeId: asStoreId(row.storeId),
     provider: row.provider,
     status: row.status as SellerPaymentAccount['status'],
     externalAccountId: row.externalAccountId,
     externalAccountLabel: row.externalAccountLabel,
-    accessToken: row.accessToken,
-    refreshToken: row.refreshToken,
+    accessToken: secrets.open(row.accessToken, SECRET_CONTEXT.accessToken),
+    refreshToken: secrets.open(row.refreshToken, SECRET_CONTEXT.refreshToken),
     expiresAt: row.expiresAt,
     connectedAt: row.connectedAt,
     updatedAt: row.updatedAt,
   };
 }
 
-export function fromAccount(account: SellerPaymentAccount) {
+export function fromAccount(account: SellerPaymentAccount, secrets: SecretBox) {
   return {
     storeId: String(account.storeId),
     provider: account.provider,
     status: account.status,
     externalAccountId: account.externalAccountId,
     externalAccountLabel: account.externalAccountLabel,
-    accessToken: account.accessToken,
-    refreshToken: account.refreshToken,
+    accessToken: secrets.seal(account.accessToken, SECRET_CONTEXT.accessToken),
+    refreshToken: secrets.seal(account.refreshToken, SECRET_CONTEXT.refreshToken),
     expiresAt: account.expiresAt,
     connectedAt: account.connectedAt,
     updatedAt: account.updatedAt,

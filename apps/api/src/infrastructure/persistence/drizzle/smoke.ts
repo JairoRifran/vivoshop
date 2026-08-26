@@ -8,6 +8,7 @@ import { Pool } from 'pg';
 import { CheckoutService } from '../../../application/services/checkout.service';
 import type { LiveService } from '../../../application/services/live.service';
 import { PaymentService } from '../../../application/services/payment.service';
+import { developmentSecretBox } from '../../crypto/secret-box';
 import { NoopRealtimePublisher } from '../../realtime/realtime.module';
 import type { StoreService } from '../../../application/services/store.service';
 import { FakePaymentProvider } from '../../providers/fake-payment.provider';
@@ -170,7 +171,7 @@ async function main(): Promise<void> {
     const payments = new PaymentService(
       provider,
       new DrizzlePaymentRepository(db),
-      new DrizzleSellerPaymentAccountRepository(db),
+      new DrizzleSellerPaymentAccountRepository(db, developmentSecretBox()),
       new DrizzleOAuthStateRepository(db),
       new DrizzlePaymentTransactionRunner(db),
       new DrizzleUserRepository(db),
