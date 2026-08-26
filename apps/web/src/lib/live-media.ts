@@ -23,6 +23,46 @@ export interface StreamCredentials {
   canPublish: boolean;
 }
 
+/**
+ * Opciones de la sala del **comprador**.
+ *
+ * `adaptiveStream` va apagado, y no es un descuido — es la corrección de un
+ * error que estuvo en producción.
+ *
+ * LiveKit decide si alguien está mirando observando **los elementos que él
+ * mismo adjuntó** con `track.attach()`. `useViewerStream` no hace eso: saca el
+ * `MediaStreamTrack` de cada pista y arma su propio `MediaStream`, que
+ * `VideoStage` asigna a `srcObject`. Desde donde LiveKit mira no hay ningún
+ * elemento adjunto, así que concluye que nadie está viendo y —en sus propias
+ * palabras— "temporarily pause the data flow until they are visible again".
+ *
+ * El síntoma era exactamente ese: el video andaba unos segundos y se quedaba
+ * en negro, con la conexión viva y el vivo abierto. De los peores errores
+ * posibles, porque no falla nada: sin excepción, sin desconexión, sin una
+ * línea en la consola. Solo deja de haber imagen.
+ *
+ * Se apaga en vez de adjuntar la pista porque adjuntar significaría que el
+ * hook maneje el `<video>`, y su contrato hoy es "devolvé un MediaStream" — el
+ * mismo que cumple el proveedor simulado. Recuperar la optimización está
+ * anotado como deuda; lo que se pierde es poco, porque la pantalla del
+ * comprador es prácticamente siempre el video a pantalla completa.
+ */
+export const VIEWER_ROOM_OPTIONS = { adaptiveStream: false } as const;
+
+/**
+ * Opciones de la sala del **vendedor**.
+ *
+ * `dynacast` se queda encendido: pausa las capas que ningún espectador
+ * consume, y eso es ahorro real de batería y de datos en un teléfono que
+ * transmite. Con la sala del comprador arreglada, los espectadores vuelven a
+ * pedir la pista y dynacast publica.
+ *
+ * `adaptiveStream` se sacó de acá porque no hacía nada: es una opción de quien
+ * se suscribe, y esta sala no se suscribe a nada — el vendedor es el único que
+ * publica. Configuración muerta que solo invitaba a copiarla al otro lado.
+ */
+export const BROADCASTER_ROOM_OPTIONS = { dynacast: true } as const;
+
 /** Plain-language connection quality. Never milliseconds, never percentages. */
 export type ConnectionLabel = 'buena' | 'regular' | 'inestable' | 'sin-conexion';
 
@@ -180,7 +220,7 @@ export function useBroadcast(
       const livekit = await import('livekit-client');
       if (cancelled) return;
 
-      room = new livekit.Room({ adaptiveStream: true, dynacast: true });
+      room = new livekit.Room(BROADCASTER_ROOM_OPTIONS);
       roomRef.current = room;
 
       room.on(livekit.RoomEvent.ConnectionQualityChanged, (value, participant) => {
@@ -292,7 +332,7 @@ export function useViewerStream(credentials: StreamCredentials | null): ViewerSt
       const livekit = await import('livekit-client');
       if (cancelled) return;
 
-      room = new livekit.Room({ adaptiveStream: true });
+      room = new livekit.Room(VIEWER_ROOM_OPTIONS);
 
       const media = new MediaStream();
       const sync = () => {
