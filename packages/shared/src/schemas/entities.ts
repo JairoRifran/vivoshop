@@ -73,6 +73,13 @@ export const storeSummarySchema = z.object({
   isVerified: z.boolean(),
   /** Present only when the request is authenticated. */
   isFollowing: z.boolean().optional(),
+  /**
+   * Si quien mira pidió que le avisen cuando esta tienda salga al aire.
+   *
+   * Separado de `isFollowing` porque son dos decisiones: se puede seguir una
+   * tienda sin querer que te interrumpa. Ausente para quien no está en sesión.
+   */
+  notifyOnLive: z.boolean().optional(),
   isLiveNow: z.boolean().optional(),
 });
 export type StoreSummaryDto = z.infer<typeof storeSummarySchema>;

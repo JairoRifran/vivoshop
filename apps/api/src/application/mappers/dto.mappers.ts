@@ -59,6 +59,7 @@ export function toUserDto(user: User): UserDto {
 
 export interface StoreContext {
   readonly isFollowing?: boolean;
+  readonly notifyOnLive?: boolean;
   readonly isLiveNow?: boolean;
 }
 
@@ -81,6 +82,10 @@ export function toStoreSummaryDto(store: Store, context: StoreContext = {}): Sto
     // publicarlos convertiría la ausencia del tick en una marca negativa.
     isVerified: isVerified(store.verification),
     ...(context.isFollowing === undefined ? {} : { isFollowing: context.isFollowing }),
+    // La preferencia de aviso de quien mira. No filtra nada de nadie más: es su
+    // propia decisión, y la pantalla la necesita para dibujar el interruptor en
+    // el estado correcto.
+    ...(context.notifyOnLive === undefined ? {} : { notifyOnLive: context.notifyOnLive }),
     ...(context.isLiveNow === undefined ? {} : { isLiveNow: context.isLiveNow }),
   };
 }

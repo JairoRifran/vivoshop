@@ -8,6 +8,7 @@ export * from './entities/live';
 export * from './entities/order';
 export * from './entities/bid';
 export * from './entities/payment';
+export * from './entities/push-delivery';
 export * from './entities/push-subscription';
 export * from './entities/protection';
 export * from './entities/seller-payment-account';

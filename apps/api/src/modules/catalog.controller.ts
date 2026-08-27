@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { asProductId, asStoreId, type StoreCategory } from '@vivo/domain';
+import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import {
   createStoreRequestSchema,
@@ -92,6 +93,7 @@ export class StoresController {
    * tocar la primera. Sin ella, apagar los avisos de una tienda obligaba a
    * dejar de seguirla.
    */
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Put(':storeId/follow/notifications')
   setLiveNotifications(
     @CurrentUser() user: AuthenticatedUser | null,

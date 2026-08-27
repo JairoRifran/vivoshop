@@ -14,6 +14,7 @@ import type {
   StoreId,
   User,
   UserId,
+  PushDeliveryType,
   PushSubscription,
 } from '@vivo/domain';
 import type {
@@ -31,6 +32,7 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
 import { MemoryDatabase } from './memory-database';
@@ -308,6 +310,11 @@ export class MemoryFollowRepository implements FollowRepository {
     );
   }
 
+  async notifyOnLive(userId: UserId, storeId: StoreId): Promise<boolean | null> {
+    const follow = this.db.follows.get(MemoryDatabase.followKey(String(userId), String(storeId)));
+    return follow?.notifyOnLive ?? null;
+  }
+
   async setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void> {
     const key = MemoryDatabase.followKey(String(userId), String(storeId));
     const existing = this.db.follows.get(key);
@@ -379,5 +386,52 @@ export class MemoryPushSubscriptionRepository implements PushSubscriptionReposit
       const entry = this.db.pushSubscriptions.get(endpoint);
       if (entry) this.db.pushSubscriptions.set(endpoint, { ...entry, lastNotifiedAt: at });
     }
+  }
+}
+
+
+/**
+ * Las constancias de envío, en memoria.
+ *
+ * Un `Map` con la misma clave compuesta que la tabla. Es correcto dentro de un
+ * proceso —que es todo lo que este driver promete— y por eso el mismo contrato
+ * se prueba contra los dos: si algún día la garantía dependiera de algo que
+ * solo hace PostgreSQL, la suite lo diría.
+ */
+@Injectable()
+export class MemoryPushDeliveryRepository implements PushDeliveryRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async reserve(input: {
+    liveSessionId: LiveSessionId;
+    endpoints: readonly string[];
+    type: PushDeliveryType;
+    at: Date;
+  }): Promise<string[]> {
+    const claimed: string[] = [];
+
+    for (const endpoint of input.endpoints) {
+      const key = MemoryDatabase.deliveryKey(String(input.liveSessionId), endpoint, input.type);
+      // `has` y `set` sin `await` en el medio: en un solo hilo esto es atómico,
+      // igual que el `on conflict do nothing` del otro driver.
+      if (this.db.pushDeliveries.has(key)) continue;
+      this.db.pushDeliveries.set(key, {
+        liveSessionId: input.liveSessionId,
+        endpoint,
+        type: input.type,
+        createdAt: input.at,
+      });
+      claimed.push(endpoint);
+    }
+
+    return claimed;
+  }
+
+  async countFor(liveSessionId: LiveSessionId, type: PushDeliveryType): Promise<number> {
+    let total = 0;
+    for (const entry of this.db.pushDeliveries.values()) {
+      if (entry.liveSessionId === liveSessionId && entry.type === type) total += 1;
+    }
+    return total;
   }
 }

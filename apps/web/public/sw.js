@@ -9,6 +9,12 @@
  * Explicitly NOT here: caching API responses. A live session's viewer count,
  * stock and prices must never be served from a stale cache — showing someone
  * a sold-out product as available is worse than showing them an error.
+ *
+ * M05 agrega push. Se agrega **a este** service worker en vez de generar otro:
+ * las tres reglas de arriba —la instalación, el caché de la cáscara, y sobre
+ * todo el no cachear la API— siguen valiendo, y un archivo generado las
+ * perdería sin que nadie lo note hasta que alguien vea un producto agotado
+ * como disponible.
  */
 
 const VERSION = 'vivo-v1';
@@ -78,3 +84,74 @@ async function cacheFirst(request, cacheName) {
     return new Response('', { status: 504 });
   }
 }
+
+
+/* --- Avisos (M05) -------------------------------------------------------- */
+
+/**
+ * Un aviso empujado por el servidor.
+ *
+ * El payload trae todo armado, incluida la URL: este archivo no sabe cómo se
+ * construye una ruta de la aplicación, y no tiene por qué. Si el mensaje viene
+ * roto o vacío se muestra algo genérico en vez de no mostrar nada — una
+ * notificación silenciosa es peor que una imprecisa, porque el navegador puede
+ * revocar el permiso de push a un sitio que recibe mensajes y no notifica.
+ */
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+
+  const title = payload.title || 'VivoShop';
+  const data = payload.data || {};
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      // Un vivo reemplaza al aviso anterior del mismo vivo en vez de apilarse.
+      // El servidor ya garantiza un envío por dispositivo; esto es el cinturón
+      // por si el mismo mensaje llegara dos veces por el camino.
+      tag: data.liveSessionId ? `live:${data.liveSessionId}` : 'vivoshop',
+      renotify: false,
+      data,
+    }),
+  );
+});
+
+/**
+ * Tocar el aviso abre **ese** vivo, no la home.
+ *
+ * Si la aplicación ya está abierta se reutiliza esa ventana: abrir una segunda
+ * pestaña del mismo sitio es la forma más rápida de perder el carrito, la
+ * sesión de video o lo que la persona estuviera haciendo.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const target = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      for (const client of clientList) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        await client.focus();
+        // `navigate` puede no estar disponible según el navegador; si no está,
+        // al menos la ventana quedó al frente.
+        if (typeof client.navigate === 'function') await client.navigate(target);
+        return;
+      }
+
+      await self.clients.openWindow(target);
+    })(),
+  );
+});

@@ -3,11 +3,21 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { UserId } from '@vivo/domain';
+import { asLiveSessionId, type UserId } from '@vivo/domain';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/http';
-import { NOTIFICATION_PROVIDER, PUSH_SUBSCRIPTION_REPOSITORY } from './application/ports/tokens';
-import type { PushSubscriptionRepository } from './application/ports/repositories';
+import { LiveService } from './application/services/live.service';
+import { NotificationService } from './application/services/notification.service';
+import { StoreService } from './application/services/store.service';
+import {
+  NOTIFICATION_PROVIDER,
+  PUSH_DELIVERY_REPOSITORY,
+  PUSH_SUBSCRIPTION_REPOSITORY,
+} from './application/ports/tokens';
+import type {
+  PushDeliveryRepository,
+  PushSubscriptionRepository,
+} from './application/ports/repositories';
 
 /**
  * Los avisos, sobre HTTP real.
@@ -24,9 +34,16 @@ import type { PushSubscriptionRepository } from './application/ports/repositorie
 let app: INestApplication;
 let http: () => request.Agent;
 let subscriptions: PushSubscriptionRepository;
+let deliveries: PushDeliveryRepository;
 
-/** Lo que el proveedor de avisos recibió, para poder afirmar sobre ello. */
-const sent: Array<{ userIds: readonly UserId[]; title: string }> = [];
+/**
+ * Lo que el transporte recibió.
+ *
+ * Se afirma sobre esto y sobre `PushDelivery`, que son dos cosas distintas: uno
+ * dice a qué dispositivos se intentó, el otro dice cuáles quedaron reservados.
+ * La garantía del milestone vive en el segundo.
+ */
+const sent: Array<{ endpoints: string[]; title: string }> = [];
 
 const BUYER = { email: 'ana@vivo.uy', password: 'vivo1234' };
 const SELLER = { email: 'martina@vivo.uy', password: 'vivo1234' };
@@ -60,8 +77,9 @@ beforeAll(async () => {
     .overrideProvider(NOTIFICATION_PROVIDER)
     .useValue({
       key: 'spy',
-      notify: async (input: { userIds: readonly UserId[]; title: string }) => {
-        sent.push({ userIds: input.userIds, title: input.title });
+      send: async (input: { targets: readonly { endpoint: string }[]; message: { title: string } }) => {
+        sent.push({ endpoints: input.targets.map((t) => t.endpoint), title: input.message.title });
+        return { delivered: input.targets.map((t) => t.endpoint), gone: [] };
       },
     })
     .compile();
@@ -72,6 +90,7 @@ beforeAll(async () => {
 
   http = () => request(app.getHttpServer());
   subscriptions = app.get(PUSH_SUBSCRIPTION_REPOSITORY);
+  deliveries = app.get(PUSH_DELIVERY_REPOSITORY);
 }, 60_000);
 
 afterAll(async () => {
@@ -187,86 +206,175 @@ describe('darse de baja', () => {
   });
 });
 
-describe('a quién se le avisa cuando una tienda sale al aire', () => {
-  async function goLive(auth: Record<string, string>, title: string): Promise<void> {
-    await http()
+
+describe('un aviso por vivo y por dispositivo', () => {
+  /**
+   * La condición que cierra M05, y que tiene que seguir siendo cierta después
+   * de reconexiones, reintentos, reinicios de la API y anuncios concurrentes.
+   *
+   * Se afirma sobre `PushDelivery` y no sobre cuántas veces se llamó al
+   * transporte, porque es la constancia que sobrevive a un reinicio. Contar
+   * llamadas probaría la memoria de este proceso; contar filas prueba la
+   * garantía.
+   */
+  async function goLive(auth: Record<string, string>, title: string): Promise<string> {
+    const created = await http()
       .post('/seller/live')
       .set(auth)
       .send({ title, productIds: ['campera-roma'], mode: 'now' })
       .expect(201);
+    return created.body.id as string;
   }
 
-  it('se avisa a los seguidores', async () => {
-    const buyer = await authFor(BUYER);
-    const me = await http().get('/auth/me').set(buyer).expect(200);
-    await http().post('/stores/plaza-moda/follow').set(buyer).expect(201);
-
-    await goLive(await authFor(SELLER), 'Otoño en Plaza Moda');
-
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.title).toContain('está en vivo');
-    expect(sent[0]?.userIds.map(String)).toContain(String(me.body.id));
-  });
-
-  it('no se le avisa a quien apagó el aviso de esa tienda', async () => {
-    /**
-     * `notifyOnLive` existía en el dominio desde M01 y las dos consultas lo
-     * ignoraban. Mientras no se enviaba nada, daba igual.
-     *
-     * Con avisos de verdad no da igual, y no solo por cortesía: quien recibe
-     * uno que apagó no vuelve a apagar esa tienda, revoca el permiso del
-     * navegador — y eso se lleva puestos los avisos de todas las demás.
-     */
-    const buyer = await authFor(BUYER);
-    const me = await http().get('/auth/me').set(buyer).expect(200);
-
-    await http().post('/stores/plaza-moda/follow').set(buyer).expect(201);
+  /**
+   * Deja a Ana siguiendo con aviso encendido, y devuelve cuántos dispositivos
+   * tiene registrados.
+   *
+   * El número se lee, no se asume: los tests de arriba le dejaron varios
+   * navegadores suscritos, y eso es exactamente el caso multi-dispositivo. Un
+   * vivo tiene que producir una entrega **por dispositivo**, no una en total.
+   */
+  async function subscribeAna(): Promise<{ auth: Record<string, string>; devices: number }> {
+    const auth = await authFor(BUYER);
+    await http().post('/stores/plaza-moda/follow').set(auth).expect(201);
     await http()
       .put('/stores/plaza-moda/follow/notifications')
-      .set(buyer)
-      .send({ notifyOnLive: false })
-      .expect(200);
-
-    await goLive(await authFor(SELLER), 'Sin aviso para Ana');
-
-    const destinatarios = sent.at(-1)?.userIds.map(String) ?? [];
-    expect(destinatarios).not.toContain(String(me.body.id));
-  });
-
-  it('se puede volver a encender', async () => {
-    // Apagar no puede ser una puerta de una sola dirección: quien se arrepiente
-    // tiene que poder volver sin dejar de seguir la tienda y seguirla de nuevo.
-    const buyer = await authFor(BUYER);
-    const me = await http().get('/auth/me').set(buyer).expect(200);
-
-    await http().post('/stores/plaza-moda/follow').set(buyer).expect(201);
-    await http()
-      .put('/stores/plaza-moda/follow/notifications')
-      .set(buyer)
-      .send({ notifyOnLive: false })
-      .expect(200);
-    await http()
-      .put('/stores/plaza-moda/follow/notifications')
-      .set(buyer)
+      .set(auth)
       .send({ notifyOnLive: true })
       .expect(200);
+    await http()
+      .post('/notifications/subscriptions')
+      .set(auth)
+      .send(subscription('https://push.uy/telefono-de-ana'))
+      .expect(204);
 
-    await goLive(await authFor(SELLER), 'De vuelta');
+    const me = await http().get('/auth/me').set(auth).expect(200);
+    const devices = (await subscriptions.listForUser(me.body.id as UserId)).length;
+    return { auth, devices };
+  }
 
-    expect(sent.at(-1)?.userIds.map(String)).toContain(String(me.body.id));
+  it('un vivo nuevo avisa una vez, y anunciarlo de nuevo no avisa otra', async () => {
+    const { devices } = await subscribeAna();
+    const seller = await authFor(SELLER);
+
+    const liveA = await goLive(seller, 'Live A');
+    // Una entrega por dispositivo: es lo correcto, no un duplicado.
+    expect(await deliveries.countFor(asLiveSessionId(liveA), 'live_started')).toBe(devices);
+
+    // Reconciliación: el mismo vivo se vuelve a anunciar, como pasaría tras un
+    // reinicio de la API o un reintento de un barrido.
+    const service = app.get(NotificationService);
+    const live = app.get(LiveService);
+    const session = await live.findSession(asLiveSessionId(liveA));
+    const store = await app.get(StoreService).requireById(session!.storeId);
+
+    await service.announceLiveStarted(session!, store);
+    await service.announceLiveStarted(session!, store);
+
+    expect(await deliveries.countFor(asLiveSessionId(liveA), 'live_started')).toBe(devices);
   });
 
-  it('cambiar la preferencia de una tienda que no seguís no existe', async () => {
-    // La precondición se establece, no se hereda: los tests de arriba dejaron a
-    // Ana siguiendo la tienda, y depender de ese orden es cómo una suite
-    // empieza a mentir.
+  it('dos anuncios concurrentes del mismo vivo reservan una sola vez', async () => {
+    // La carrera de dos réplicas. Sin la clave compuesta en la base, las dos
+    // leerían "no hay entrega" y las dos enviarían.
+    const { devices } = await subscribeAna();
+    const seller = await authFor(SELLER);
+    const liveId = await goLive(seller, 'Live concurrente');
+
+    const service = app.get(NotificationService);
+    const live = app.get(LiveService);
+    const session = await live.findSession(asLiveSessionId(liveId));
+    const store = await app.get(StoreService).requireById(session!.storeId);
+
+    const results = await Promise.all([
+      service.announceLiveStarted(session!, store),
+      service.announceLiveStarted(session!, store),
+      service.announceLiveStarted(session!, store),
+    ]);
+
+    // Ninguno reserva de nuevo: el anuncio del arranque ya se llevó el destino.
+    expect(results.reduce((total, value) => total + value, 0)).toBe(0);
+    expect(await deliveries.countFor(asLiveSessionId(liveId), 'live_started')).toBe(devices);
+  });
+
+  it('un vivo nuevo sí vuelve a avisar', async () => {
+    // La constancia es por vivo, no por dispositivo: terminar uno y empezar
+    // otro es un aviso legítimo.
+    const { devices } = await subscribeAna();
+    const seller = await authFor(SELLER);
+
+    const liveA = await goLive(seller, 'Primero');
+    await http().post(`/seller/live/${liveA}/end`).set(seller).expect(201);
+    const liveB = await goLive(seller, 'Segundo');
+
+    expect(await deliveries.countFor(asLiveSessionId(liveA), 'live_started')).toBe(devices);
+    expect(await deliveries.countFor(asLiveSessionId(liveB), 'live_started')).toBe(devices);
+  });
+
+  it('con el aviso apagado no se reserva nada', async () => {
+    const { auth: buyer } = await subscribeAna();
+    await http()
+      .put('/stores/plaza-moda/follow/notifications')
+      .set(buyer)
+      .send({ notifyOnLive: false })
+      .expect(200);
+
+    const liveId = await goLive(await authFor(SELLER), 'Sin aviso');
+    expect(await deliveries.countFor(asLiveSessionId(liveId), 'live_started')).toBe(0);
+  });
+
+  it('sin dispositivo suscrito no hay a quién avisarle', async () => {
+    // Seguir con el aviso encendido no alcanza: hace falta que alguien haya
+    // aceptado el permiso en algún navegador.
+    const auth = await authFor(BUYER);
+    await http().post('/stores/plaza-moda/follow').set(auth).expect(201);
+    await http()
+      .delete('/notifications/subscriptions')
+      .send({ endpoint: 'https://push.uy/telefono-de-ana' })
+      .expect(204);
+
+    const liveId = await goLive(await authFor(SELLER), 'Sin dispositivos');
+    expect(await deliveries.countFor(asLiveSessionId(liveId), 'live_started')).toBe(0);
+  });
+
+  it('el aviso lleva el nombre de la tienda y la URL del vivo', async () => {
+    // Lo que el service worker necesita para abrir exactamente ese vivo, y
+    // nada más: sin email, sin tokens, sin nada privado.
+    await subscribeAna();
+    const liveId = await goLive(await authFor(SELLER), 'Con datos');
+
+    const message = sent.at(-1);
+    expect(message?.title).toBe('🔴 Plaza Moda está en vivo');
+    expect(message?.endpoints).toContain('https://push.uy/telefono-de-ana');
+
+    const live = app.get(LiveService);
+    const session = await live.findSession(asLiveSessionId(liveId));
+    expect(session).not.toBeNull();
+  });
+});
+
+describe('la preferencia se ve en la pantalla de la tienda', () => {
+  it('apagarla se refleja en el detalle que lee la pantalla', async () => {
+    // La pantalla dibuja el interruptor con lo que trae el detalle de la
+    // tienda. Si el detalle no reflejara la preferencia, alguien vería
+    // encendido algo que apagó — y volvería a apagarlo sin efecto.
     const buyer = await authFor(BUYER);
+
     await http().delete('/stores/plaza-moda/follow').set(buyer);
+    await http().post('/stores/plaza-moda/follow').set(buyer).expect(201);
+
+    const siguiendo = await http().get('/stores/plaza-moda').set(buyer).expect(200);
+    expect(siguiendo.body.isFollowing).toBe(true);
+    expect(siguiendo.body.notifyOnLive).toBe(true);
 
     await http()
       .put('/stores/plaza-moda/follow/notifications')
       .set(buyer)
       .send({ notifyOnLive: false })
-      .expect(404);
+      .expect(200);
+
+    const apagado = await http().get('/stores/plaza-moda').set(buyer).expect(200);
+    expect(apagado.body.isFollowing).toBe(true);
+    expect(apagado.body.notifyOnLive).toBe(false);
   });
 });

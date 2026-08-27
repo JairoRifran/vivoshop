@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { ConnectionError } from '@/components/connection-error';
 import { LiveRowCard, ProductCard } from '@/components/cards';
 import { FollowButton } from '@/components/follow-button';
+import { LiveNotificationsToggle } from '@/components/live-notifications';
 import { ChevronLeftIcon, StoreIcon, TruckIcon } from '@/components/icons';
 import { VerifiedBadge } from '@/components/verified-badge';
 import { api, safe } from '@/lib/api';
@@ -97,8 +98,27 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
               size="md"
             />
           </div>
+
         </div>
       </header>
+
+      {/*
+        El interruptor permanente, y solo para quien ya sigue la tienda.
+
+        Fuera del encabezado a propósito: ese encabezado es `sticky`, y un
+        control dentro de algo que flota sobre el resto queda tapado por lo que
+        pase por debajo. Ofrecerlo a quien no sigue la tienda tampoco tendría
+        sentido: sería pedirle que decida sobre algo que todavía no eligió.
+      */}
+      {store.isFollowing ? (
+        <section className="px-4 pt-3">
+          <LiveNotificationsToggle
+            storeId={store.id}
+            storeName={store.name}
+            notifyOnLive={store.notifyOnLive ?? true}
+          />
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-3 gap-2 px-4">
         <Stat label="Reputación" value={`★ ${store.rating.toFixed(1)}`} note={`${store.reviewCount} reseñas`} />

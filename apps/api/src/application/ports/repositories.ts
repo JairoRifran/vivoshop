@@ -10,6 +10,7 @@ import type {
   Product,
   ProductId,
   ProductStatus,
+  PushDeliveryType,
   PushSubscription,
   Store,
   StoreCategory,
@@ -126,6 +127,8 @@ export interface FollowRepository {
    * la preferencia en cada `follow`, y a decidir qué pasa cuando no viene.
    */
   setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void>;
+  /** La preferencia actual, o `null` si no sigue la tienda. */
+  notifyOnLive(userId: UserId, storeId: StoreId): Promise<boolean | null>;
   remove(userId: UserId, storeId: StoreId): Promise<void>;
 }
 
@@ -145,6 +148,32 @@ export interface PushSubscriptionRepository {
   remove(endpoint: string): Promise<void>;
   removeMany(endpoints: readonly string[]): Promise<void>;
   markNotified(endpoints: readonly string[], at: Date): Promise<void>;
+}
+
+/**
+ * La constancia de qué aviso ya se decidió para qué dispositivo.
+ *
+ * Un solo método, y es el que importa: `reserve` **reclama** los destinos que
+ * todavía nadie reclamó y devuelve solo esos. Es un insert con clave compuesta,
+ * no un "leer y después escribir": dos réplicas anunciando el mismo vivo
+ * compiten y una sola gana cada destino.
+ */
+export interface PushDeliveryRepository {
+  /**
+   * Reserva los envíos que faltan y devuelve cuáles quedaron reservados.
+   *
+   * Lo que **no** vuelve son los que otro ya reservó. Llamarlo dos veces con
+   * los mismos argumentos devuelve la lista completa la primera vez y vacía la
+   * segunda, y esa asimetría es toda la idempotencia.
+   */
+  reserve(input: {
+    liveSessionId: LiveSessionId;
+    endpoints: readonly string[];
+    type: PushDeliveryType;
+    at: Date;
+  }): Promise<string[]>;
+  /** Cuántos avisos de ese tipo se decidieron para un vivo. Para pruebas y soporte. */
+  countFor(liveSessionId: LiveSessionId, type: PushDeliveryType): Promise<number>;
 }
 
 export interface StoredAnalyticsEvent {

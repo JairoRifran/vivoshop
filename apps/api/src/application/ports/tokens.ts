@@ -11,6 +11,7 @@ export const MESSAGE_REPOSITORY = Symbol('MessageRepository');
 export const ORDER_REPOSITORY = Symbol('OrderRepository');
 export const FOLLOW_REPOSITORY = Symbol('FollowRepository');
 export const PUSH_SUBSCRIPTION_REPOSITORY = Symbol('PushSubscriptionRepository');
+export const PUSH_DELIVERY_REPOSITORY = Symbol('PushDeliveryRepository');
 export const ANALYTICS_REPOSITORY = Symbol('AnalyticsRepository');
 /** Transactional boundary for order creation. See `order-transaction.ts`. */
 export const ORDER_TRANSACTION_RUNNER = Symbol('OrderTransactionRunner');

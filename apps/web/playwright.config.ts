@@ -114,6 +114,19 @@ export default defineConfig({
         // tests exercise: no LiveKit account is needed to run the suite.
         STREAMING_PROVIDER: 'mock',
         E2E_RESET_TOKEN: RESET_TOKEN,
+        /**
+         * Avisos activos en la suite, con claves VAPID de juguete.
+         *
+         * Con `log` la clave pública es `null` y la pantalla —correctamente—
+         * no ofrece el control, así que no habría nada que probar. Estas claves
+         * son un par válido generado para esto y no protegen nada: los envíos
+         * no salen de la máquina, porque ningún endpoint de prueba existe.
+         */
+        NOTIFICATION_PROVIDER: 'webpush',
+        VAPID_PUBLIC_KEY:
+          'BJxKjbfF4qLZ7VjXm2vQ8Y3nJ0hR5tWc9Dg1SsPoIuYtRe4WqAzXcVbNmKlJhGfDsAqWeRtYuIoPaSdFgHjKlZx',
+        VAPID_PRIVATE_KEY: 'kZ8pQr3sTuVwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZ00',
+        VAPID_SUBJECT: 'mailto:e2e@vivoshop.uy',
       },
     },
     {

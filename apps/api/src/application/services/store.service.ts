@@ -50,12 +50,18 @@ export class StoreService {
     const store = await this.stores.findBySlug(slug);
     if (!store) throw new NotFoundException({ code: 'NOT_FOUND', message: 'Tienda inexistente.' });
 
-    const [isFollowing, liveNow] = await Promise.all([
-      viewerId ? this.follows.exists(viewerId, store.id) : Promise.resolve(false),
+    const [notifyOnLive, liveNow] = await Promise.all([
+      // Una sola consulta para las dos cosas: `null` significa "no la sigue", y
+      // un booleano significa que la sigue con esa preferencia.
+      viewerId ? this.follows.notifyOnLive(viewerId, store.id) : Promise.resolve(null),
       this.live.list({ storeId: store.id, status: 'live', limit: 1 }),
     ]);
 
-    return toStoreDetailDto(store, { isFollowing, isLiveNow: liveNow.length > 0 });
+    return toStoreDetailDto(store, {
+      isFollowing: notifyOnLive !== null,
+      ...(notifyOnLive === null ? {} : { notifyOnLive }),
+      isLiveNow: liveNow.length > 0,
+    });
   }
 
   async mine(ownerId: UserId): Promise<StoreDetailDto | null> {

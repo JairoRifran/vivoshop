@@ -137,6 +137,16 @@ export function createApiClient(options: ApiClientOptions) {
       updateProfile: (input: UpdateProfileRequest) => request<UserDto>('PATCH', '/auth/me', input),
     },
 
+    notifications: {
+      /** Registra este navegador. Va con la sesión del servidor, no del cliente. */
+      subscribe: (input: {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+        userAgent?: string;
+      }) => request<void>('POST', '/notifications/subscriptions', input),
+      unsubscribe: (endpoint: string) =>
+        request<void>('DELETE', '/notifications/subscriptions', { endpoint }),
+    },
     stores: {
       list: (query?: Query, init?: RequestInit) =>
         request<StoreSummaryDto[]>('GET', '/stores', undefined, { ...init, query }),
@@ -153,6 +163,11 @@ export function createApiClient(options: ApiClientOptions) {
       follow: (storeId: string) => request<{ following: boolean }>('POST', `/stores/${storeId}/follow`),
       unfollow: (storeId: string) =>
         request<{ following: boolean }>('DELETE', `/stores/${storeId}/follow`),
+      /** Enciende o apaga el aviso de "salió al aire" para una tienda seguida. */
+      setLiveNotifications: (storeId: string, notifyOnLive: boolean) =>
+        request<{ notifyOnLive: boolean }>('PUT', `/stores/${storeId}/follow/notifications`, {
+          notifyOnLive,
+        }),
       following: (init?: RequestInit) =>
         request<StoreSummaryDto[]>('GET', '/stores/following', undefined, init),
     },

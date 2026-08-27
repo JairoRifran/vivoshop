@@ -147,15 +147,46 @@ export interface StreamingProvider {
 
 export type NotificationChannel = 'push' | 'email' | 'whatsapp';
 
+/** Un destino concreto: el navegador y las claves con las que descifra. */
+export interface PushTarget {
+  readonly endpoint: string;
+  readonly p256dh: string;
+  readonly auth: string;
+}
+
+/**
+ * Lo que se muestra, y lo que el service worker necesita para abrir el vivo.
+ *
+ * `data` viaja al navegador tal cual, así que **nunca** lleva email, tokens ni
+ * nada privado: lo mínimo para armar la notificación y saber a dónde ir.
+ */
+export interface PushMessage {
+  readonly title: string;
+  readonly body: string;
+  readonly data: Record<string, string>;
+}
+
+/**
+ * El transporte, y solo el transporte.
+ *
+ * A quién avisarle y cuántas veces lo decide `NotificationService`. Este puerto
+ * recibe destinos ya resueltos y ya reservados. La separación importa: la regla
+ * de "un aviso por vivo y por dispositivo" tiene que valer igual el día que el
+ * transporte sea otro.
+ */
 export interface NotificationProvider {
   readonly key: string;
-  notify(input: {
-    userIds: readonly UserId[];
-    channel: NotificationChannel;
-    title: string;
-    body: string;
-    data?: Record<string, string>;
-  }): Promise<void>;
+  /**
+   * Envía a los destinos indicados.
+   *
+   * Nunca tira: devuelve qué se entregó y qué destinos están muertos, y el
+   * llamador decide qué hacer con eso. Un servicio de push caído no puede
+   * voltear la operación que disparó el aviso.
+   */
+  send(input: {
+    targets: readonly PushTarget[];
+    message: PushMessage;
+  }): Promise<{ delivered: readonly string[]; gone: readonly string[] }>;
 }
 
 export interface ShippingQuote {

@@ -4,7 +4,8 @@ import type { LiveSessionId, Order, StoreId, UserId } from '@vivo/domain';
 import type {
   ChannelParticipant,
   IdGenerator,
-  NotificationChannel,
+  PushMessage,
+  PushTarget,
   NotificationProvider,
   ShippingProvider,
   ShippingQuote,
@@ -80,16 +81,22 @@ export class LogNotificationProvider implements NotificationProvider {
 
   private readonly logger = new Logger(LogNotificationProvider.name);
 
-  async notify(input: {
-    userIds: readonly UserId[];
-    channel: NotificationChannel;
-    title: string;
-    body: string;
-    data?: Record<string, string>;
-  }): Promise<void> {
+  /**
+   * Escribe una línea y dice que entregó todo.
+   *
+   * "Entregado" es la respuesta honesta para este adaptador: no hay servidor de
+   * push que pueda rechazar nada, así que ningún destino está muerto. Devolver
+   * `gone` con contenido haría que el servicio diera de baja suscripciones
+   * perfectamente válidas en desarrollo.
+   */
+  async send(input: {
+    targets: readonly PushTarget[];
+    message: PushMessage;
+  }): Promise<{ delivered: readonly string[]; gone: readonly string[] }> {
     this.logger.log(
-      `[${input.channel}] "${input.title}" -> ${input.userIds.length} destinatario(s): ${input.body}`,
+      `"${input.message.title}" -> ${input.targets.length} dispositivo(s): ${input.message.body}`,
     );
+    return { delivered: input.targets.map((target) => target.endpoint), gone: [] };
   }
 }
 

@@ -2,9 +2,10 @@
 
 import { Button } from '@vivo/ui';
 import { useRouter } from 'next/navigation';
-import { useOptimistic, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 import { toggleFollow } from '@/lib/actions/social';
 import { track } from '@/lib/analytics';
+import { LiveNotificationsPrompt } from './live-notifications';
 
 /**
  * Follow toggle with an optimistic flip.
@@ -32,6 +33,14 @@ export function FollowButton({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [optimistic, setOptimistic] = useOptimistic(following);
+  /**
+   * El diálogo aparece **después** de seguir, y solo entonces.
+   *
+   * Seguir y aceptar avisos son dos decisiones, y el navegador solo pregunta
+   * una vez: mezclarlas gastaría esa pregunta en alguien que todavía no sabe
+   * para qué era.
+   */
+  const [askAboutNotifications, setAskAboutNotifications] = useState(false);
 
   const handleClick = () => {
     startTransition(async () => {
@@ -44,6 +53,7 @@ export function FollowButton({
       }
 
       track(result.following ? 'store_followed' : 'store_unfollowed', { storeId });
+      if (result.following) setAskAboutNotifications(true);
       router.refresh();
     });
   };
@@ -51,7 +61,8 @@ export function FollowButton({
   const dark = variant === 'dark';
 
   return (
-    <Button
+    <>
+      <Button
       size={size}
       variant={optimistic ? (dark ? 'ghost' : 'secondary') : dark ? 'live' : 'primary'}
       onClick={handleClick}
@@ -62,8 +73,17 @@ export function FollowButton({
         className ?? '',
       ].join(' ')}
     >
-      {optimistic ? 'Siguiendo' : 'Seguir'}
-      <span className="sr-only"> a {storeName}</span>
-    </Button>
+        {optimistic ? 'Siguiendo' : 'Seguir'}
+        <span className="sr-only"> a {storeName}</span>
+      </Button>
+
+      {askAboutNotifications ? (
+        <LiveNotificationsPrompt
+          storeId={storeId}
+          storeName={storeName}
+          onClose={() => setAskAboutNotifications(false)}
+        />
+      ) : null}
+    </>
   );
 }

@@ -473,6 +473,32 @@ export const pushSubscriptions = pgTable(
 );
 
 /**
+ * Qué aviso ya se decidió para qué dispositivo.
+ *
+ * La clave primaria compuesta **es** la garantía de idempotencia: reservar es
+ * un insert, y si otro proceso ya reservó, el insert no entra. Sobrevive a un
+ * reinicio y a dos réplicas anunciando el mismo vivo, que es exactamente lo que
+ * una comprobación en memoria no puede hacer.
+ *
+ * `on delete cascade` desde las dos puntas: si el vivo o el dispositivo
+ * desaparecen, la constancia deja de tener sentido.
+ */
+export const pushDeliveries = pgTable(
+  'push_deliveries',
+  {
+    liveSessionId: text('live_session_id')
+      .notNull()
+      .references(() => liveSessions.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint')
+      .notNull()
+      .references(() => pushSubscriptions.endpoint, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.liveSessionId, table.endpoint, table.type] })],
+);
+
+/**
  * El `state` anti-CSRF del OAuth.
  *
  * Sin esto cualquiera puede inducir a un vendedor a conectar la cuenta de otro
@@ -664,6 +690,7 @@ export const disputes = pgTable('disputes', {
 export const schema = {
   users,
   pushSubscriptions,
+  pushDeliveries,
   stores,
   products,
   productVariants,

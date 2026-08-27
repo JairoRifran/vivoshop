@@ -39,7 +39,6 @@ import { toLiveDetailDto, toLiveSummaryDto, toMessageDto } from '../mappers/dto.
 import type {
   Clock,
   IdGenerator,
-  NotificationProvider,
   PresenceStore,
   StreamChannel,
   StreamCredentials,
@@ -55,13 +54,13 @@ import type {
   StoreRepository,
 } from '../ports/repositories';
 import { ENV, type AppEnv } from '../../config/env';
+import { NotificationService } from './notification.service';
 import {
   CLOCK,
   FOLLOW_REPOSITORY,
   ID_GENERATOR,
   LIVE_REPOSITORY,
   MESSAGE_REPOSITORY,
-  NOTIFICATION_PROVIDER,
   ORDER_REPOSITORY,
   PRESENCE_STORE,
   PRODUCT_REPOSITORY,
@@ -85,7 +84,7 @@ export class LiveService {
     @Inject(FOLLOW_REPOSITORY) private readonly follows: FollowRepository,
     @Inject(PRESENCE_STORE) private readonly presence: PresenceStore,
     @Inject(STREAMING_PROVIDER) private readonly streaming: StreamingProvider,
-    @Inject(NOTIFICATION_PROVIDER) private readonly notifications: NotificationProvider,
+    private readonly notifications: NotificationService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(ENV) private readonly env: AppEnv,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -755,16 +754,18 @@ export class LiveService {
    * Nunca tira: si el servicio de avisos está caído, el vivo empieza igual. Lo
    * que se pierde es una notificación, no una transmisión.
    */
+  /**
+   * Le avisa a los seguidores que la tienda salió al aire.
+   *
+   * Delega en `NotificationService`, que es quien sabe a quién y cuántas veces.
+   * Acá solo se decide **cuándo**: cuando el vivo entra de verdad en `live`, y
+   * no cuando se crea, se programa o se prepara.
+   *
+   * No tira nunca —el servicio lo garantiza— así que un servicio de push caído
+   * no puede impedir una transmisión.
+   */
   private async announce(session: LiveSession, store: Store): Promise<void> {
-    const followers = await this.follows.listFollowerIds(store.id);
-    if (followers.length === 0) return;
-
-    await this.notifications.notify({
-      userIds: followers,
-      channel: 'push',
-      title: `${store.name} está en vivo`,
-      body: session.title,
-      data: { liveSessionId: String(session.id), storeSlug: store.slug },
-    });
+    await this.notifications.announceLiveStarted(session, store);
   }
+
 }

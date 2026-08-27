@@ -12,6 +12,7 @@ import type {
   StoreId,
   User,
   UserId,
+  PushDeliveryType,
   PushSubscription,
 } from '@vivo/domain';
 import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
@@ -30,6 +31,7 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
 import { DRIZZLE, type VivoDatabase } from './client';
@@ -487,6 +489,15 @@ export class DrizzleFollowRepository implements FollowRepository {
       .onConflictDoNothing();
   }
 
+  async notifyOnLive(userId: UserId, storeId: StoreId): Promise<boolean | null> {
+    const [row] = await this.db
+      .select({ notifyOnLive: t.follows.notifyOnLive })
+      .from(t.follows)
+      .where(and(eq(t.follows.userId, String(userId)), eq(t.follows.storeId, String(storeId))))
+      .limit(1);
+    return row?.notifyOnLive ?? null;
+  }
+
   async setNotifyOnLive(userId: UserId, storeId: StoreId, notify: boolean): Promise<void> {
     await this.db
       .update(t.follows)
@@ -621,4 +632,56 @@ function toPushSubscription(row: {
     createdAt: row.createdAt,
     lastNotifiedAt: row.lastNotifiedAt,
   };
+}
+
+
+/**
+ * Las constancias de envío, en PostgreSQL.
+ *
+ * `reserve` es un solo `insert … on conflict do nothing … returning`. Esa
+ * combinación es la garantía entera: PostgreSQL decide quién gana cada destino
+ * y devuelve únicamente las filas que realmente insertó, así que dos réplicas
+ * anunciando el mismo vivo se reparten los destinos sin solaparse y sin que
+ * ninguna tenga que leer antes.
+ */
+@Injectable()
+export class DrizzlePushDeliveryRepository implements PushDeliveryRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async reserve(input: {
+    liveSessionId: LiveSessionId;
+    endpoints: readonly string[];
+    type: PushDeliveryType;
+    at: Date;
+  }): Promise<string[]> {
+    if (input.endpoints.length === 0) return [];
+
+    const claimed = await this.db
+      .insert(t.pushDeliveries)
+      .values(
+        input.endpoints.map((endpoint) => ({
+          liveSessionId: String(input.liveSessionId),
+          endpoint,
+          type: input.type,
+          createdAt: input.at,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ endpoint: t.pushDeliveries.endpoint });
+
+    return claimed.map((row) => row.endpoint);
+  }
+
+  async countFor(liveSessionId: LiveSessionId, type: PushDeliveryType): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(t.pushDeliveries)
+      .where(
+        and(
+          eq(t.pushDeliveries.liveSessionId, String(liveSessionId)),
+          eq(t.pushDeliveries.type, type),
+        ),
+      );
+    return row?.total ?? 0;
+  }
 }

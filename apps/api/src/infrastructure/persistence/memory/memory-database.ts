@@ -12,6 +12,7 @@ import type {
   Order,
   Payment,
   Product,
+  PushDelivery,
   PushSubscription,
   SellerPaymentAccount,
   Store,
@@ -56,6 +57,8 @@ export class MemoryDatabase {
   readonly follows = new Map<string, Follow>();
   /** Navegadores suscritos, por endpoint. Ver `PushSubscription`. */
   readonly pushSubscriptions = new Map<string, PushSubscription>();
+  /** Constancias de envío, por `vivo::endpoint::tipo`. Ver `PushDelivery`. */
+  readonly pushDeliveries = new Map<string, PushDelivery>();
   readonly idempotency = new Map<string, IdempotencyRecord>();
   readonly analytics: StoredAnalyticsEvent[] = [];
 
@@ -82,6 +85,10 @@ export class MemoryDatabase {
 
   static idempotencyKey(scope: string, key: string): string {
     return `${scope}::${key}`;
+  }
+
+  static deliveryKey(liveSessionId: string, endpoint: string, type: string): string {
+    return `${liveSessionId}::${endpoint}::${type}`;
   }
 
   static accountKey(storeId: string, provider: string): string {
@@ -132,6 +139,7 @@ export class MemoryDatabase {
     this.orders.clear();
     this.follows.clear();
     this.pushSubscriptions.clear();
+    this.pushDeliveries.clear();
     this.idempotency.clear();
     this.analytics.length = 0;
     this.payments.clear();

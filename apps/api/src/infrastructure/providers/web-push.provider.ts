@@ -1,13 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { isPushSubscriptionGone, type UserId } from '@vivo/domain';
+import { isPushSubscriptionGone } from '@vivo/domain';
 import webpush from 'web-push';
+
+/** Cuántos envíos van a la vez. Ver el comentario en `send`. */
+const BATCH_SIZE = 50;
 import type {
-  Clock,
-  NotificationChannel,
   NotificationProvider,
+  PushMessage,
+  PushTarget,
 } from '../../application/ports/infrastructure';
-import type { PushSubscriptionRepository } from '../../application/ports/repositories';
-import { CLOCK, PUSH_SUBSCRIPTION_REPOSITORY } from '../../application/ports/tokens';
 import { ENV, type AppEnv } from '../../config/env';
 
 /**
@@ -47,12 +48,7 @@ export class WebPushNotificationProvider implements NotificationProvider {
 
   private readonly logger = new Logger(WebPushNotificationProvider.name);
 
-  constructor(
-    @Inject(ENV) env: AppEnv,
-    @Inject(PUSH_SUBSCRIPTION_REPOSITORY)
-    private readonly subscriptions: PushSubscriptionRepository,
-    @Inject(CLOCK) private readonly clock: Clock,
-  ) {
+  constructor(@Inject(ENV) env: AppEnv) {
     webpush.setVapidDetails(
       env.VAPID_SUBJECT,
       env.VAPID_PUBLIC_KEY ?? '',
@@ -60,72 +56,57 @@ export class WebPushNotificationProvider implements NotificationProvider {
     );
   }
 
-  async notify(input: {
-    userIds: readonly UserId[];
-    channel: NotificationChannel;
-    title: string;
-    body: string;
-    data?: Record<string, string>;
-  }): Promise<void> {
-    // Este adaptador solo sabe de push. Pedirle un email no es un error del
-    // llamador: es que todavía no existe el adaptador que corresponde.
-    if (input.channel !== 'push') {
-      this.logger.log(`Canal "${input.channel}" sin adaptador; no se envió nada.`);
-      return;
-    }
+  async send(input: {
+    targets: readonly PushTarget[];
+    message: PushMessage;
+  }): Promise<{ delivered: readonly string[]; gone: readonly string[] }> {
+    if (input.targets.length === 0) return { delivered: [], gone: [] };
 
-    const targets = await this.subscriptions.listForUsers(input.userIds);
-    if (targets.length === 0) return;
-
-    const payload = JSON.stringify({
-      title: input.title,
-      body: input.body,
-      data: input.data ?? {},
-    });
-
+    const payload = JSON.stringify(input.message);
     const gone: string[] = [];
     const delivered: string[] = [];
 
-    // En paralelo: son cientos de envíos independientes y en serie el último
-    // llegaría cuando el vivo ya empezó. `allSettled` porque el fallo de uno no
-    // puede detener a los demás.
-    await Promise.allSettled(
-      targets.map(async (target) => {
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: target.endpoint,
-              keys: { p256dh: target.p256dh, auth: target.auth },
-            },
-            payload,
-            // El aviso de un vivo pierde sentido cuando el vivo terminó. Media
-            // hora es más que suficiente y evita que alguien prenda el teléfono
-            // al otro día con la notificación de algo que ya no está.
-            { TTL: 30 * 60, urgency: 'high' },
-          );
-          delivered.push(target.endpoint);
-        } catch (error) {
-          const status = (error as { statusCode?: number }).statusCode ?? 0;
-          if (isPushSubscriptionGone(status)) {
-            gone.push(target.endpoint);
-            return;
+    /**
+     * En tandas, no todos de golpe ni uno detrás de otro.
+     *
+     * Secuencial, el último aviso llegaría cuando el vivo ya empezó. Todos a la
+     * vez, mil envíos abrirían mil conexiones desde el proceso que en ese mismo
+     * momento está abriendo una transmisión. La tanda acota las dos cosas.
+     *
+     * El límite real de este diseño está en el comentario de la clase: con
+     * muchos miles de seguidores esto tiene que salir del proceso y pasar a una
+     * cola. Hoy no hace falta, y se dice para que se note cuándo empieza a
+     * hacer falta.
+     */
+    for (let start = 0; start < input.targets.length; start += BATCH_SIZE) {
+      const batch = input.targets.slice(start, start + BATCH_SIZE);
+
+      await Promise.allSettled(
+        batch.map(async (target) => {
+          try {
+            await webpush.sendNotification(
+              { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
+              payload,
+              // El aviso de un vivo pierde sentido cuando el vivo terminó. Media
+              // hora evita que alguien prenda el teléfono al otro día con la
+              // notificación de algo que ya no está.
+              { TTL: 30 * 60, urgency: 'high' },
+            );
+            delivered.push(target.endpoint);
+          } catch (error) {
+            const status = (error as { statusCode?: number }).statusCode ?? 0;
+            if (isPushSubscriptionGone(status)) {
+              gone.push(target.endpoint);
+              return;
+            }
+            // Ni el endpoint ni las claves: un log no es lugar para el destino
+            // de los avisos de una persona.
+            this.logger.warn(`Envío rechazado por el servicio de push (${status}).`);
           }
-          // Ni el endpoint ni las claves: un log no es lugar para el destino de
-          // los avisos de una persona.
-          this.logger.warn(`Envío rechazado por el servicio de push (${status}).`);
-        }
-      }),
-    );
+        }),
+      );
+    }
 
-    const now = this.clock.now();
-    await Promise.allSettled([
-      this.subscriptions.removeMany(gone),
-      this.subscriptions.markNotified(delivered, now),
-    ]);
-
-    this.logger.log(
-      `"${input.title}" → ${delivered.length}/${targets.length} entregados` +
-        (gone.length > 0 ? `, ${gone.length} suscripciones dadas de baja` : ''),
-    );
+    return { delivered, gone };
   }
 }

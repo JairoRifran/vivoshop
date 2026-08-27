@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { trimUserAgent, type PushSubscription } from '@vivo/domain';
 import { z } from 'zod';
 import { Public, requireUser, type AuthenticatedUser } from '../common/auth.guard';
@@ -63,7 +64,14 @@ export class NotificationsController {
    * suscribirse dos veces desde el mismo navegador actualiza una fila en vez de
    * crear dos. Sin eso, cada visita sumaría un destino más y un vivo mandaría
    * el mismo aviso varias veces al mismo teléfono.
+   *
+   * El límite es más bajo que el general: un navegador se suscribe una vez por
+   * dispositivo, así que treinta por minuto es holgado para reintentos
+   * legítimos y corta a alguien que quisiera llenar la tabla con endpoints
+   * inventados. El `endpoint` además se valida como URL y con largo acotado,
+   * para que un cuerpo grande no sea otra forma de lo mismo.
    */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('subscriptions')
   @HttpCode(204)
   async subscribe(
@@ -92,6 +100,7 @@ export class NotificationsController {
    * con la sesión rompería el caso que más importa: alguien que revoca el
    * permiso desde el navegador y ya no tiene sesión con qué pedir la baja.
    */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Public()
   @Delete('subscriptions')
   @HttpCode(204)

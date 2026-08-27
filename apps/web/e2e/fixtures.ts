@@ -95,4 +95,25 @@ export async function sweepReservations(): Promise<number> {
   }
 }
 
+/**
+ * Cuántos avisos se decidieron para un vivo.
+ *
+ * El navegador de una prueba no puede leer el centro de notificaciones del
+ * sistema operativo, y una prueba que dependiera de eso sería frágil sin probar
+ * nada nuestro. La garantía de M05 vive en las constancias de la base, así que
+ * es sobre eso que se afirma.
+ */
+export async function pushDeliveriesFor(liveSessionId: string): Promise<number> {
+  const api = await request.newContext({ baseURL: E2E.apiUrl });
+  try {
+    const response = await api.get(`/testing/push-deliveries/${liveSessionId}`, {
+      headers: { 'x-e2e-reset': E2E.resetToken },
+    });
+    const body = (await response.json()) as { count: number };
+    return body.count;
+  } finally {
+    await api.dispose();
+  }
+}
+
 export { expect } from '@playwright/test';

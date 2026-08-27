@@ -1,11 +1,13 @@
 import {
   Controller,
   ForbiddenException,
+  Get,
   Headers,
   HttpCode,
   Inject,
   Logger,
   Module,
+  Param,
   Post,
   type DynamicModule,
 } from '@nestjs/common';
@@ -14,6 +16,9 @@ import { Public } from '../common/auth.guard';
 import { ENV, type AppEnv } from '../config/env';
 import { MemoryDatabase } from '../infrastructure/persistence/memory/memory-database';
 import { PasswordService } from '../infrastructure/security/password.service';
+import { asLiveSessionId } from '@vivo/domain';
+import { PUSH_DELIVERY_REPOSITORY } from '../application/ports/tokens';
+import type { PushDeliveryRepository } from '../application/ports/repositories';
 import { ApplicationModule } from '../application/application.module';
 import { PaymentService } from '../application/services/payment.service';
 
@@ -55,6 +60,8 @@ export class TestingController {
     private readonly passwords: PasswordService,
     private readonly db: MemoryDatabase,
     private readonly payments: PaymentService,
+    @Inject(PUSH_DELIVERY_REPOSITORY)
+    private readonly pushDeliveries: PushDeliveryRepository,
   ) {}
 
   /**
@@ -92,6 +99,26 @@ export class TestingController {
     this.assertAllowed(token);
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1_000);
     return { resolved: await this.payments.expireLapsedCheckouts(tomorrow) };
+  }
+
+  /**
+   * Cuántos avisos se decidieron para un vivo.
+   *
+   * El E2E no puede leer el centro de notificaciones del sistema operativo, y
+   * una prueba que dependiera de eso sería frágil sin probar nada nuestro. Lo
+   * que sí se puede afirmar —y es donde vive la garantía— es cuántas
+   * constancias quedaron en la base.
+   */
+  @Public()
+  @Get('push-deliveries/:liveSessionId')
+  async deliveries(
+    @Param('liveSessionId') liveSessionId: string,
+    @Headers('x-e2e-reset') token?: string,
+  ): Promise<{ count: number }> {
+    this.assertAllowed(token);
+    return {
+      count: await this.pushDeliveries.countFor(asLiveSessionId(liveSessionId), 'live_started'),
+    };
   }
 
   private assertAllowed(token?: string): void {
