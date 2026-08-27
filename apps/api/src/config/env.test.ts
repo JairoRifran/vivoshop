@@ -21,6 +21,11 @@ const PRODUCTION: NodeJS.ProcessEnv = {
   // Obligatoria en producción desde M04.1: sin ella los tokens de los
   // vendedores quedarían en texto plano y el proceso no arranca.
   ENCRYPTION_KEY: Buffer.alloc(32, 'k').toString('base64'),
+  // Obligatorio desde M06: `local` guarda las imágenes en memoria, así que en
+  // producción cada deploy borraría las fotos de perfil de todo el mundo.
+  STORAGE_PROVIDER: 'supabase',
+  SUPABASE_URL: 'https://proyecto.supabase.co',
+  SUPABASE_SERVICE_KEY: 'clave-de-servicio',
 };
 
 const SHA = 'cd206a699103e727f7929f0279f09e8b96cf6e58';
@@ -130,5 +135,23 @@ describe('la clave de cifrado', () => {
     expect(() => loadEnv({ ...PRODUCTION, ENCRYPTION_KEY: 'demasiado-corta' })).toThrow(
       /32 bytes/,
     );
+  });
+});
+
+describe('dónde se guardan las imágenes', () => {
+  it('en desarrollo alcanza con el driver local', () => {
+    expect(loadEnv(BASE).STORAGE_PROVIDER).toBe('local');
+  });
+
+  it('supabase sin credenciales no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, SUPABASE_SERVICE_KEY: undefined })).toThrow(
+      /SUPABASE_SERVICE_KEY/,
+    );
+  });
+
+  it('producción con el driver local no arranca, y dice por qué', () => {
+    // Los bytes en memoria mueren con el proceso. Dejarlo pasar sería que las
+    // fotos de perfil desaparecieran en el siguiente deploy, en silencio.
+    expect(() => loadEnv({ ...PRODUCTION, STORAGE_PROVIDER: 'local' })).toThrow(/en memoria/);
   });
 });

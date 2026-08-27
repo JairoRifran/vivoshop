@@ -51,6 +51,7 @@ export function toUserDto(user: User): UserDto {
     email: user.email,
     phone: user.phone,
     avatarUrl: user.avatarUrl,
+    bio: user.bio,
     country: user.country,
     roles: [...user.roles],
     createdAt: user.createdAt.toISOString(),
@@ -100,6 +101,7 @@ export function toStoreDetailDto(store: Store, context: StoreContext = {}): Stor
     freeShippingThresholdMinor: store.settings.freeShippingThresholdMinor,
     pickupInstructions: store.settings.pickupInstructions,
     acceptsReturns: store.settings.acceptsReturns,
+    whatsapp: store.settings.whatsapp,
     createdAt: store.createdAt.toISOString(),
   };
 }

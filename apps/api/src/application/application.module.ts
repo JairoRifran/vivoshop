@@ -7,6 +7,7 @@ import { AuthService } from './services/auth.service';
 import { CatalogService } from './services/catalog.service';
 import { CheckoutService } from './services/checkout.service';
 import { LiveService } from './services/live.service';
+import { MediaService } from './services/media.service';
 import { NotificationService } from './services/notification.service';
 import { OrderService } from './services/order.service';
 import { PaymentService } from './services/payment.service';
@@ -17,6 +18,7 @@ import { StoreService } from './services/store.service';
 
 const SERVICES = [
   NotificationService,
+  MediaService,
   AuthService,
   StoreService,
   CatalogService,

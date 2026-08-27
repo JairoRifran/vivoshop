@@ -7,6 +7,7 @@ export * from './entities/catalog';
 export * from './entities/live';
 export * from './entities/order';
 export * from './entities/bid';
+export * from './entities/media';
 export * from './entities/payment';
 export * from './entities/push-delivery';
 export * from './entities/push-subscription';

@@ -18,6 +18,14 @@ export interface User {
   readonly email: string;
   readonly phone: string | null;
   readonly avatarUrl: string | null;
+  /**
+   * Una linea sobre quien es. Opcional y corta a proposito.
+   *
+   * En una tienda quien vende es tan parte del producto como lo que vende: es
+   * la diferencia entre comprarle a un logo y comprarle a alguien. Corta
+   * porque nadie lee un parrafo debajo de una foto de perfil.
+   */
+  readonly bio: string | null;
   readonly country: CountryCode;
   readonly roles: readonly UserRole[];
   readonly status: UserStatus;

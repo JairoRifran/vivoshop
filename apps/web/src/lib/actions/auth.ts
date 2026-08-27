@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { api } from '../api';
 import { clearToken, writeToken } from '../session';
-import { failure, text, type ActionState } from './shared';
+import { failure, mediaKey, optionalText, success, text, type ActionState } from './shared';
 
 function zodFieldErrors(issues: { path: PropertyKey[]; message: string }[]) {
   const fieldErrors: Record<string, string[]> = {};
@@ -80,4 +80,32 @@ export async function signOut(): Promise<void> {
   await clearToken();
   revalidatePath('/', 'layout');
   redirect('/');
+}
+
+/**
+ * Guarda el perfil: nombre, teléfono, una línea sobre quién es, y la foto.
+ *
+ * La foto llega como clave —no como URL— y el servidor comprueba que sea de
+ * quien está en sesión antes de guardarla. Ver `ImageField` y `MediaService`.
+ */
+export async function updateProfile(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.auth.updateProfile({
+      name: text(form, 'name'),
+      phone: optionalText(form, 'phone'),
+      bio: optionalText(form, 'bio'),
+      avatarKey: mediaKey(form, 'avatarKey'),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  // El avatar y el nombre se dibujan en el encabezado del perfil y en cada
+  // mensaje del chat, así que no alcanza con revalidar esta pantalla.
+  revalidatePath('/', 'layout');
+  return success('Guardamos tu perfil.');
 }

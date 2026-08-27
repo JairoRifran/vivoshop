@@ -148,6 +148,26 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
         {store.acceptsReturns ? <Badge tone="neutral">Acepta cambios</Badge> : null}
       </section>
 
+      {/*
+        El contacto directo, si la tienda lo publicó.
+
+        `rel="noreferrer"` y `target="_blank"` porque sale del sitio, y los
+        dígitos se limpian acá: `wa.me` no acepta espacios ni guiones, y el
+        campo los admite porque nadie escribe un teléfono sin ellos.
+      */}
+      {store.whatsapp ? (
+        <div className="px-4">
+          <a
+            href={`https://wa.me/${store.whatsapp.replace(/[^0-9]/g, '')}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center rounded-2xl border border-line bg-surface px-4 text-[14px] font-bold text-ink transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            Escribir por WhatsApp
+          </a>
+        </div>
+      ) : null}
+
       {liveNow ? (
         <section className="px-4">
           <Link

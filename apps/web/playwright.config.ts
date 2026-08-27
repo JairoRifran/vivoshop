@@ -115,6 +115,16 @@ export default defineConfig({
         STREAMING_PROVIDER: 'mock',
         E2E_RESET_TOKEN: RESET_TOKEN,
         /**
+         * Imágenes en memoria, y la base pública apuntando a *este* puerto.
+         *
+         * `API_PUBLIC_URL` importa: es lo que la API pone en la URL de subida y
+         * en la URL pública de cada imagen. Con el valor por defecto (`:4000`)
+         * el navegador subiría contra un servidor que en esta corrida no
+         * existe, y la prueba fallaría por la configuración y no por el código.
+         */
+        STORAGE_PROVIDER: 'local',
+        API_PUBLIC_URL: API_URL,
+        /**
          * Avisos activos en la suite, con claves VAPID de juguete.
          *
          * Con `log` la clave pública es `null` y la pantalla —correctamente—

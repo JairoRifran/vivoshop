@@ -19,6 +19,7 @@ import {
   createRedisClient,
 } from './cache/redis-cache';
 import { LiveKitStreamingProvider } from './providers/livekit.provider';
+import { SupabaseStorageProvider } from './providers/supabase-storage.provider';
 import { FakePaymentProvider } from './providers/fake-payment.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import { WebPushNotificationProvider } from './providers/web-push.provider';
@@ -100,8 +101,23 @@ const externalProviders: Provider[] = [
     useFactory: (env: AppEnv, log: LogNotificationProvider) =>
       env.NOTIFICATION_PROVIDER === 'webpush' ? new WebPushNotificationProvider(env) : log,
   },
+  LocalStorageProvider,
   { provide: SHIPPING_PROVIDER, useClass: FlatRateShippingProvider },
-  { provide: STORAGE_PROVIDER, useClass: LocalStorageProvider },
+  {
+    /**
+     * `local` por defecto para que un clon del repositorio arranque sin bucket,
+     * y `supabase` cuando hay credenciales. Mismo patrón que el streaming, los
+     * cobros y los avisos.
+     *
+     * `env.ts` corta el arranque si producción quedara en `local`: los bytes en
+     * memoria mueren con el proceso, así que un deploy borraría las fotos de
+     * perfil de todo el mundo.
+     */
+    provide: STORAGE_PROVIDER,
+    inject: [ENV, LocalStorageProvider],
+    useFactory: (env: AppEnv, local: LocalStorageProvider) =>
+      env.STORAGE_PROVIDER === 'supabase' ? new SupabaseStorageProvider(env) : local,
+  },
 ];
 
 /** Resolved once so `imports` and `exports` reference the same instance. */
@@ -120,6 +136,7 @@ const persistence = PersistenceModule.register();
     NOTIFICATION_PROVIDER,
     SHIPPING_PROVIDER,
     STORAGE_PROVIDER,
+    LocalStorageProvider,
     persistence,
   ],
 })

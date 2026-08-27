@@ -203,6 +203,24 @@ const envSchema = z.object({
    * avisarle a un humano antes de bloquear un remitente. No es decorativo.
    */
   VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.uy'),
+
+  // --- Imagenes (M06) ---------------------------------------------------
+  /**
+   * `local` guarda los bytes en memoria y muere con el proceso, que es por que
+   * es el default: un clon del repositorio arranca sin contratar un bucket.
+   * `supabase` es el camino real.
+   */
+  STORAGE_PROVIDER: z.enum(['local', 'supabase']).default('local'),
+  /** Base del proyecto de Supabase, p. ej. `https://abc.supabase.co`. */
+  SUPABASE_URL: z.string().optional(),
+  /**
+   * Clave de servicio. Firma las subidas y **nunca** sale del servidor.
+   *
+   * Es la credencial mas poderosa del proyecto de Supabase: salta las politicas
+   * de fila. No va al navegador, no se loguea, no aparece en `/health`.
+   */
+  SUPABASE_SERVICE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().default('vivoshop-media'),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -281,6 +299,20 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     if (missing.length > 0) {
       throw new Error(`STREAMING_PROVIDER=livekit requires ${missing.join(', ')}`);
     }
+  }
+  if (env.STORAGE_PROVIDER === 'supabase') {
+    const missing = (['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'] as const).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      throw new Error(`STORAGE_PROVIDER=supabase requires ${missing.join(', ')}`);
+    }
+  }
+  // Los bytes en memoria mueren con el proceso: en produccion eso significa que
+  // cada deploy borra las fotos de perfil de todo el mundo.
+  if (env.NODE_ENV === 'production' && env.STORAGE_PROVIDER === 'local') {
+    throw new Error(
+      'STORAGE_PROVIDER=local guarda las imagenes en memoria y las pierde en cada deploy. ' +
+        'Configurá STORAGE_PROVIDER=supabase con SUPABASE_URL y SUPABASE_SERVICE_KEY.',
+    );
   }
   if (env.NOTIFICATION_PROVIDER === 'webpush') {
     const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter(

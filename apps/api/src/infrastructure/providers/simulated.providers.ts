@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { getDeliveryMethod } from '@vivo/config';
-import type { LiveSessionId, Order, StoreId, UserId } from '@vivo/domain';
+import type { LiveSessionId, Order, StoreId } from '@vivo/domain';
 import type {
   ChannelParticipant,
   IdGenerator,
@@ -15,6 +15,7 @@ import type {
   StreamingProvider,
 } from '../../application/ports/infrastructure';
 import { ID_GENERATOR } from '../../application/ports/tokens';
+import { ENV, type AppEnv } from '../../config/env';
 
 /**
  * The remaining external seams. Each one is a real implementation of its port,
@@ -133,21 +134,55 @@ export class FlatRateShippingProvider implements ShippingProvider {
 export class LocalStorageProvider implements StorageProvider {
   readonly key = 'local';
 
-  constructor(@Inject(ID_GENERATOR) private readonly ids: IdGenerator) {}
+  /**
+   * Los archivos, en memoria.
+   *
+   * Es el driver de desarrollo, y hace lo mismo que el de datos: existe para
+   * que un clon del repositorio arranque sin que nadie contrate un bucket. Los
+   * bytes mueren con el proceso, que es exactamente lo que se quiere en una
+   * suite de pruebas y lo que lo hace inservible en producción — por eso el
+   * arranque avisa si alguien lo deja puesto ahí.
+   *
+   * A diferencia de Supabase, acá los bytes **sí** pasan por la API. Es una
+   * concesión del entorno de desarrollo, no del diseño: `MediaController` los
+   * recibe y los devuelve, y en producción esa ruta no la usa nadie.
+   */
+  private readonly files = new Map<string, { contentType: string; bytes: Buffer }>();
 
   /**
-   * M01 stores no binaries: product imagery is rendered on demand by the web
-   * app from a deterministic key. The signature already matches a presigned
-   * S3 upload so the client-side upload flow will not need rewriting.
+   * Absolutas, y bajo `media/dev`.
+   *
+   * Absolutas porque la web corre en otro origen: una ruta relativa la
+   * resolvería el navegador contra el frontend y no llegaría nunca —donde
+   * además `/media/:kind/:seed` ya existe generando imágenes de relleno.
    */
-  async createUploadTarget(_input: {
-    ownerId: UserId;
+  private readonly base: string;
+
+  constructor(@Inject(ENV) env: AppEnv) {
+    this.base = env.API_PUBLIC_URL.replace(/\/+$/, '');
+  }
+
+  async createUploadTarget(input: {
+    key: string;
     contentType: string;
-  }): Promise<{ uploadUrl: string; file: { url: string; key: string } }> {
-    const key = this.ids.generate('file');
+    maxBytes: number;
+  }): Promise<{ uploadUrl: string; expiresAt: Date }> {
     return {
-      uploadUrl: `/uploads/${key}`,
-      file: { key, url: `/media/upload/${key}` },
+      uploadUrl: `${this.base}/media/dev/upload/${input.key}`,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1_000),
     };
+  }
+
+  publicUrl(key: string): string {
+    return `${this.base}/media/dev/file/${key}`;
+  }
+
+  /** Guarda los bytes. Solo lo llama `MediaController`, y solo con este driver. */
+  put(key: string, contentType: string, bytes: Buffer): void {
+    this.files.set(key, { contentType, bytes });
+  }
+
+  get(key: string): { contentType: string; bytes: Buffer } | null {
+    return this.files.get(key) ?? null;
   }
 }

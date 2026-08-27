@@ -37,6 +37,7 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     phone: text('phone'),
     avatarUrl: text('avatar_url'),
+    bio: text('bio'),
     country: text('country').notNull().default('UY'),
     /** Additive: a single account can hold both `buyer` and `seller`. */
     roles: jsonb('roles').$type<string[]>().notNull().default(['buyer']),

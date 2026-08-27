@@ -74,7 +74,17 @@ export type DomainErrorCode =
   /** The winner's window to pay has passed. */
   | 'BID_RESERVATION_EXPIRED'
   /** The product already has a bid session open in this live. */
-  | 'BID_SESSION_ALREADY_OPEN';
+  | 'BID_SESSION_ALREADY_OPEN'
+  // --- Imagenes de perfil y tienda (M06) --------------------------------
+  /**
+   * La clave de imagen no tiene la forma que emitimos, o es de otro dueno.
+   *
+   * Un solo codigo para ambos casos a proposito: distinguirlos le diria a quien
+   * prueba claves ajenas cuales existen.
+   */
+  | 'INVALID_MEDIA_KEY'
+  /** El almacenamiento de imagenes refuso la operacion o esta inalcanzable. */
+  | 'STORAGE_UNAVAILABLE';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

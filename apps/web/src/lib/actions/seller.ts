@@ -5,7 +5,7 @@ import type { OrderStatus } from '@vivo/domain';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { api } from '../api';
-import { failure, number, optionalText, success, text, type ActionState } from './shared';
+import { failure, mediaKey, number, optionalText, success, text, type ActionState } from './shared';
 
 const SELLER_PATHS = ['/vender', '/vender/productos', '/vender/pedidos', '/vender/lives'];
 
@@ -232,6 +232,9 @@ export async function updateStoreSettings(
       name: text(form, 'name'),
       description: text(form, 'description'),
       city: optionalText(form, 'city'),
+      whatsapp: optionalText(form, 'whatsapp'),
+      logoKey: mediaKey(form, 'logoKey'),
+      coverKey: mediaKey(form, 'coverKey'),
       freeShippingThresholdMinor: threshold && threshold > 0 ? threshold : null,
       pickupInstructions: optionalText(form, 'pickupInstructions'),
       status: text(form, 'status') === 'paused' ? 'paused' : 'active',
