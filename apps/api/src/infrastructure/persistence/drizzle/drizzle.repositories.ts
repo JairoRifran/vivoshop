@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  AuthProvider,
+  UserIdentity,
   Follow,
   LiveMessage,
   LiveSession,
@@ -15,7 +17,8 @@ import type {
   PushDeliveryType,
   PushSubscription,
 } from '@vivo/domain';
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { asUserId } from '@vivo/domain';
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type {
   AnalyticsRepository,
   FollowRepository,
@@ -31,6 +34,9 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  LoginState,
+  LoginStateRepository,
+  UserIdentityRepository,
   PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
@@ -88,10 +94,13 @@ export class DrizzleUserRepository implements UserRepository {
       .from(t.users)
       .where(eq(t.users.email, email.toLowerCase()))
       .limit(1);
-    return row ? { userId: row.id as UserId, passwordHash: row.passwordHash } : null;
+    // Sin hash no hay credenciales: es una cuenta que solo se abre con un
+    // proveedor. Devolver null hace que el login por contrasena falle como
+    // "email o contrasena incorrectos", que es exactamente lo correcto.
+    return row?.passwordHash ? { userId: row.id as UserId, passwordHash: row.passwordHash } : null;
   }
 
-  async create(user: User, passwordHash: string): Promise<User> {
+  async create(user: User, passwordHash: string | null): Promise<User> {
     await this.db.insert(t.users).values(fromUser(user, passwordHash));
     return user;
   }
@@ -684,4 +693,126 @@ export class DrizzlePushDeliveryRepository implements PushDeliveryRepository {
       );
     return row?.total ?? 0;
   }
+}
+
+/**
+ * Las formas de entrar, en Postgres.
+ *
+ * `link` es un upsert sobre la clave primaria (proveedor, id del proveedor).
+ * Dos callbacks simultáneos del mismo proveedor —dos pestañas, un doble clic—
+ * no pueden crear dos filas ni reventar con una violación de unicidad: el
+ * segundo actualiza la del primero.
+ */
+@Injectable()
+export class DrizzleUserIdentityRepository implements UserIdentityRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async find(provider: AuthProvider, providerUserId: string): Promise<UserIdentity | null> {
+    const [row] = await this.db
+      .select()
+      .from(t.userIdentities)
+      .where(
+        and(
+          eq(t.userIdentities.provider, provider),
+          eq(t.userIdentities.providerUserId, providerUserId),
+        ),
+      )
+      .limit(1);
+    return row ? toUserIdentity(row) : null;
+  }
+
+  async listForUser(userId: UserId): Promise<UserIdentity[]> {
+    const rows = await this.db
+      .select()
+      .from(t.userIdentities)
+      .where(eq(t.userIdentities.userId, String(userId)));
+    return rows.map(toUserIdentity);
+  }
+
+  async link(identity: UserIdentity): Promise<UserIdentity> {
+    await this.db
+      .insert(t.userIdentities)
+      .values({
+        provider: identity.provider,
+        providerUserId: identity.providerUserId,
+        userId: String(identity.userId),
+        email: identity.email,
+        createdAt: identity.createdAt,
+      })
+      .onConflictDoUpdate({
+        target: [t.userIdentities.provider, t.userIdentities.providerUserId],
+        set: { email: identity.email },
+      });
+    return identity;
+  }
+}
+
+/**
+ * Los ingresos en vuelo, en Postgres.
+ *
+ * `consume` es **una sola sentencia**: el `update` filtra por no consumido y
+ * no vencido, y devuelve la fila solo si él fue quien la marcó. Dos callbacks
+ * con el mismo `state` compiten en la base y gana uno; el otro recibe cero
+ * filas y su ingreso se rechaza.
+ *
+ * Leer y después escribir tendría una ventana entre las dos operaciones, y esa
+ * ventana es exactamente el ataque del que protege el `state`.
+ */
+@Injectable()
+export class DrizzleLoginStateRepository implements LoginStateRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async create(state: LoginState): Promise<void> {
+    await this.db.insert(t.loginStates).values({
+      state: state.state,
+      provider: state.provider,
+      codeVerifier: state.codeVerifier,
+      returnTo: state.returnTo,
+      createdAt: state.createdAt,
+      expiresAt: state.expiresAt,
+      consumedAt: null,
+    });
+  }
+
+  async consume(state: string, now: Date): Promise<LoginState | null> {
+    const [row] = await this.db
+      .update(t.loginStates)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(t.loginStates.state, state),
+          isNull(t.loginStates.consumedAt),
+          gt(t.loginStates.expiresAt, now),
+        ),
+      )
+      .returning();
+
+    return row
+      ? {
+          state: row.state,
+          provider: row.provider as AuthProvider,
+          codeVerifier: row.codeVerifier,
+          returnTo: row.returnTo,
+          createdAt: row.createdAt,
+          expiresAt: row.expiresAt,
+          consumedAt: null,
+        }
+      : null;
+  }
+}
+
+function toUserIdentity(row: {
+  provider: string;
+  providerUserId: string;
+  userId: string;
+  email: string | null;
+  createdAt: Date;
+}): UserIdentity {
+  return {
+    provider: row.provider as AuthProvider,
+    providerUserId: row.providerUserId,
+    userId: asUserId(row.userId),
+    email: row.email,
+    createdAt: row.createdAt,
+  };
 }

@@ -34,7 +34,14 @@ export const users = pgTable(
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     email: text('email').notNull(),
-    passwordHash: text('password_hash').notNull(),
+    /**
+     * Opcional desde M07: quien entra con Google nunca eligio una.
+     *
+     * Null significa "esta cuenta no se abre con contrasena", y el login por
+     * contrasena tiene que tratarlo como credenciales invalidas --nunca como
+     * "no hace falta contrasena", que seria dejar la puerta abierta.
+     */
+    passwordHash: text('password_hash'),
     phone: text('phone'),
     avatarUrl: text('avatar_url'),
     bio: text('bio'),
@@ -47,6 +54,58 @@ export const users = pgTable(
   },
   (table) => [uniqueIndex('users_email_idx').on(table.email)],
 );
+
+/**
+ * Las formas de entrar a una cuenta.
+ *
+ * Una persona, muchas identidades. La clave primaria es (proveedor, id del
+ * proveedor) porque eso es lo que identifica de verdad: una cuenta de Google
+ * apunta a exactamente un usuario de VivoShop, para siempre, aunque su dueno
+ * cambie de email.
+ *
+ * El unico por (usuario, proveedor) cierra la otra direccion: una cuenta no
+ * puede tener dos Google distintos colgando.
+ */
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    provider: text('provider').notNull(),
+    /** `sub` en Google. Estable de por vida; **no** es el email. */
+    providerUserId: text('provider_user_id').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Lo que el proveedor dijo al vincular. Se guarda para poder auditar. */
+    email: text('email'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.providerUserId] }),
+    uniqueIndex('user_identities_user_provider_idx').on(table.userId, table.provider),
+  ],
+);
+
+/**
+ * El `state` anti-CSRF del ingreso social.
+ *
+ * Tabla aparte de `oauth_states` --el de Mercado Pago-- y no es duplicacion:
+ * aquel cuelga de una tienda, y acá todavía no hay ni sesion. Forzar los dos
+ * en una tabla obligaria a hacer `store_id` nullable, que es perder una
+ * invariante buena de M03 para ahorrar cinco lineas.
+ *
+ * `code_verifier` es el PKCE. Vive del lado del servidor y nunca viaja: es lo
+ * que hace que un codigo de autorizacion interceptado no sirva para nada.
+ */
+export const loginStates = pgTable('login_states', {
+  state: text('state').primaryKey(),
+  provider: text('provider').notNull(),
+  codeVerifier: text('code_verifier').notNull(),
+  /** Ruta **relativa** a la que volver. Ver `safeReturnPath`. */
+  returnTo: text('return_to').notNull().default('/'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+});
 
 export const stores = pgTable(
   'stores',
@@ -707,6 +766,8 @@ export const schema = {
   paymentWebhookEvents,
   sellerPaymentAccounts,
   oauthStates,
+  userIdentities,
+  loginStates,
   businessVerifications,
   identityVerifications,
   disputes,

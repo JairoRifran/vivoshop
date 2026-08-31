@@ -23,7 +23,7 @@ function fieldError(state: ActionState, field: string): string | undefined {
   return state.fieldErrors?.[field]?.[0];
 }
 
-export function SignInForm({ next }: { next: string }) {
+export function SignInForm({ next, defaultEmail = '' }: { next: string; defaultEmail?: string }) {
   const [state, action, pending] = useActionState(signIn, IDLE);
 
   return (
@@ -49,6 +49,10 @@ export function SignInForm({ next }: { next: string }) {
         spellCheck={false}
         placeholder="ana@vivo.uy"
         required
+        // Precargado cuando se llega rebotando de un proveedor que no verificó
+        // el email: la persona ya escribió su email allá, pedírselo de nuevo
+        // sería castigarla por nuestra regla de seguridad.
+        defaultValue={defaultEmail}
         error={fieldError(state, 'email')}
       />
       <TextInput

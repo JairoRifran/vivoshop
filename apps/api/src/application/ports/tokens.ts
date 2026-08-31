@@ -26,6 +26,10 @@ export const STREAMING_PROVIDER = Symbol('StreamingProvider');
 export const NOTIFICATION_PROVIDER = Symbol('NotificationProvider');
 export const SHIPPING_PROVIDER = Symbol('ShippingProvider');
 export const STORAGE_PROVIDER = Symbol('StorageProvider');
+/** El conjunto de proveedores de identidad habilitados. Ver `OAUTH_PROVIDERS`. */
+export const IDENTITY_PROVIDERS = Symbol('IdentityProviders');
+export const USER_IDENTITY_REPOSITORY = Symbol('UserIdentityRepository');
+export const LOGIN_STATE_REPOSITORY = Symbol('LoginStateRepository');
 
 export const CLOCK = Symbol('Clock');
 export const ID_GENERATOR = Symbol('IdGenerator');

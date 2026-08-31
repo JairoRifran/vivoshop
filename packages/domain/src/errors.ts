@@ -84,7 +84,14 @@ export type DomainErrorCode =
    */
   | 'INVALID_MEDIA_KEY'
   /** El almacenamiento de imagenes refuso la operacion o esta inalcanzable. */
-  | 'STORAGE_UNAVAILABLE';
+  | 'STORAGE_UNAVAILABLE'
+  // --- Ingreso con Google / Meta (M07) ----------------------------------
+  /** El proveedor no compartio un email, y sin email no hay a quien vincular. */
+  | 'IDENTITY_EMAIL_REQUIRED'
+  /** El proveedor de identidad refuso o esta inalcanzable. */
+  | 'IDENTITY_UNAVAILABLE'
+  /** Ese proveedor no esta habilitado en esta instalacion. */
+  | 'IDENTITY_PROVIDER_DISABLED';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

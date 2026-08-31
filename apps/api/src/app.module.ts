@@ -9,6 +9,7 @@ import { CoreModule } from './core.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { AuthController } from './modules/auth.controller';
+import { SocialAuthController } from './modules/social-auth.controller';
 import { ProductsController, StoresController } from './modules/catalog.controller';
 import { LiveController } from './modules/live.controller';
 import { MediaController } from './modules/media.controller';
@@ -53,6 +54,7 @@ import { TestingModule } from './modules/testing.controller';
     SystemController,
     NotificationsController,
     AuthController,
+    SocialAuthController,
     StoresController,
     ProductsController,
     LiveController,

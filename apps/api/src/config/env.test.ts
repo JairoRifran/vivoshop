@@ -26,6 +26,9 @@ const PRODUCTION: NodeJS.ProcessEnv = {
   STORAGE_PROVIDER: 'supabase',
   SUPABASE_URL: 'https://proyecto.supabase.co',
   SUPABASE_SERVICE_KEY: 'clave-de-servicio',
+  // Vacío desde M07: el ingreso social apagado es una producción válida, y el
+  // proveedor simulado está prohibido allá. Ver el bloque de abajo.
+  OAUTH_PROVIDERS: '',
 };
 
 const SHA = 'cd206a699103e727f7929f0279f09e8b96cf6e58';
@@ -153,5 +156,47 @@ describe('dónde se guardan las imágenes', () => {
     // Los bytes en memoria mueren con el proceso. Dejarlo pasar sería que las
     // fotos de perfil desaparecieran en el siguiente deploy, en silencio.
     expect(() => loadEnv({ ...PRODUCTION, STORAGE_PROVIDER: 'local' })).toThrow(/en memoria/);
+  });
+});
+
+describe('con qué se puede ingresar', () => {
+  it('en desarrollo alcanza con el proveedor simulado', () => {
+    // Un clon del repositorio ejercita el recorrido completo sin que nadie cree
+    // credenciales en la consola de Google.
+    expect(loadEnv(BASE).identityProviders).toEqual(['fake']);
+  });
+
+  it('vacío apaga el ingreso social', () => {
+    // Una producción sin Google es válida: la pantalla no dibuja el botón.
+    expect(loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: '' }).identityProviders).toEqual([]);
+  });
+
+  it('producción con el proveedor simulado no arranca', () => {
+    // Sería un botón que le entrega la cuenta de demostración a cualquiera.
+    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'fake' })).toThrow(
+      /cuenta de demostración/,
+    );
+  });
+
+  it('google sin credenciales no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'google' })).toThrow(
+      /GOOGLE_CLIENT_ID/,
+    );
+  });
+
+  it('google con credenciales arranca', () => {
+    const env = loadEnv({
+      ...PRODUCTION,
+      OAUTH_PROVIDERS: 'google',
+      GOOGLE_CLIENT_ID: 'id-publico',
+      GOOGLE_CLIENT_SECRET: 'secreto',
+    });
+
+    expect(env.identityProviders).toEqual(['google']);
+  });
+
+  it('un nombre mal escrito frena el despliegue', () => {
+    // Tiene que fallar al arrancar y no aparecer como un botón que no hace nada.
+    expect(() => loadEnv({ ...BASE, OAUTH_PROVIDERS: 'gogle' })).toThrow(/gogle/);
   });
 });

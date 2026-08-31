@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   Bid,
+  UserIdentity,
   BidSession,
   BusinessVerification,
   Dispute,
@@ -18,6 +19,7 @@ import type {
   Store,
   User,
 } from '@vivo/domain';
+import type { LoginState } from '../../../application/ports/repositories';
 import { buildDemoDataset, type DemoDataset } from '@vivo/seed';
 import type { StoredAnalyticsEvent } from '../../../application/ports/repositories';
 
@@ -69,6 +71,10 @@ export class MemoryDatabase {
   /** Cuentas de cobro, por `storeId::provider`. */
   readonly sellerAccounts = new Map<string, SellerPaymentAccount>();
   readonly oauthStates = new Map<string, OAuthState>();
+  /** Formas de entrar, por `proveedor::idDelProveedor`. Ver `UserIdentity`. */
+  readonly userIdentities = new Map<string, UserIdentity>();
+  /** Ingresos sociales en vuelo, por `state`. Ver `LoginState`. */
+  readonly loginStates = new Map<string, LoginState>();
   readonly businessVerifications = new Map<string, BusinessVerification>();
   readonly identityVerifications = new Map<string, IdentityVerification>();
   readonly disputes = new Map<string, Dispute>();
@@ -146,6 +152,12 @@ export class MemoryDatabase {
     this.webhookEvents.clear();
     this.sellerAccounts.clear();
     this.oauthStates.clear();
+    // Sin esto, una identidad sobrevive al reset apuntando a un usuario que ya
+    // no existe, y el siguiente ingreso social falla con un error genérico. Lo
+    // encontró una prueba de punta a punta que pasaba sola y fallaba
+    // acompañada, que es exactamente el sintoma de un reset incompleto.
+    this.userIdentities.clear();
+    this.loginStates.clear();
     this.businessVerifications.clear();
     this.identityVerifications.clear();
     this.disputes.clear();

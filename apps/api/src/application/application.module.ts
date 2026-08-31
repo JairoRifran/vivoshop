@@ -15,11 +15,13 @@ import { ProtectionService } from './services/protection.service';
 import { VerificationService } from './services/verification.service';
 import { SellerService } from './services/seller.service';
 import { StoreService } from './services/store.service';
+import { SocialAuthService } from './services/social-auth.service';
 
 const SERVICES = [
   NotificationService,
   MediaService,
   AuthService,
+  SocialAuthService,
   StoreService,
   CatalogService,
   LiveService,

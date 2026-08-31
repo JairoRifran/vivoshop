@@ -221,12 +221,40 @@ const envSchema = z.object({
    */
   SUPABASE_SERVICE_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('vivoshop-media'),
+
+  // --- Ingresar con Google / Meta (M07) ---------------------------------
+  /**
+   * Que proveedores de identidad se ofrecen, separados por coma.
+   *
+   * `fake` es el default por lo mismo que `mock` y `fake` en los otros ejes: un
+   * clon del repositorio tiene que ejercitar el recorrido completo sin que
+   * nadie cree credenciales en la consola de Google. Vacio apaga el ingreso
+   * social por completo y la pantalla no dibuja ningun boton.
+   *
+   * En produccion `fake` esta prohibido --lo corta el guardia de abajo--:
+   * seria un boton que le da la cuenta de `demo@vivo.uy` a cualquiera.
+   */
+  OAUTH_PROVIDERS: z.string().default('fake'),
+  /** Identificador publico del cliente OAuth. Se puede loguear. */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  /** Nunca sale del servidor. Nunca se loguea. Nunca va a un navegador. */
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
 
 export interface AppEnv extends RawEnv {
   readonly corsOrigins: string[];
+  /**
+   * `OAUTH_PROVIDERS` ya partido y validado.
+   *
+   * Vive acá y no en cada consumidor para que la lista se valide una sola vez,
+   * al arrancar: un nombre mal escrito tiene que frenar el despliegue, no
+   * aparecer como un botón que no hace nada.
+   */
+  readonly identityProviders: readonly string[];
   readonly isProduction: boolean;
   readonly isTest: boolean;
   /**
@@ -314,6 +342,37 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
         'Configurá STORAGE_PROVIDER=supabase con SUPABASE_URL y SUPABASE_SERVICE_KEY.',
     );
   }
+  const identityProviders = env.OAUTH_PROVIDERS.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  for (const name of identityProviders) {
+    if (!['fake', 'google', 'meta'].includes(name)) {
+      throw new Error(`OAUTH_PROVIDERS no conoce "${name}". Valores: fake, google, meta.`);
+    }
+  }
+  if (identityProviders.includes('google')) {
+    const missing = (['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] as const).filter(
+      (key) => !env[key],
+    );
+    if (missing.length > 0) {
+      throw new Error(`OAUTH_PROVIDERS con google requiere ${missing.join(', ')}`);
+    }
+  }
+  if (identityProviders.includes('meta')) {
+    const missing = (['META_APP_ID', 'META_APP_SECRET'] as const).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      throw new Error(`OAUTH_PROVIDERS con meta requiere ${missing.join(', ')}`);
+    }
+  }
+  // El proveedor falso le entrega la cuenta de demo a cualquiera que toque el
+  // boton. En una maquina de desarrollo es comodo; en produccion es la puerta
+  // abierta, y por eso el proceso se niega a arrancar asi.
+  if (env.NODE_ENV === 'production' && identityProviders.includes('fake')) {
+    throw new Error(
+      'OAUTH_PROVIDERS=fake entrega una cuenta de demostración a cualquiera. ' +
+        'En producción usá google (o dejá OAUTH_PROVIDERS vacío para apagar el ingreso social).',
+    );
+  }
   if (env.NOTIFICATION_PROVIDER === 'webpush') {
     const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter(
       (key) => !env[key],
@@ -367,6 +426,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       .filter(Boolean),
     isProduction,
     isTest: env.NODE_ENV === 'test',
+    identityProviders,
     // Se lee de `normalized` y no del esquema a propósito: así el SHA completo
     // no forma parte de `AppEnv` y no hay manera de exponerlo sin querer.
     version: deployedVersion(normalized, isProduction),

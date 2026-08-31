@@ -81,7 +81,7 @@ export function toUser(row: UserRow): User {
   };
 }
 
-export function fromUser(user: User, passwordHash: string) {
+export function fromUser(user: User, passwordHash: string | null) {
   return {
     id: String(user.id),
     name: user.name,

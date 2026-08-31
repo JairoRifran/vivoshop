@@ -8,6 +8,7 @@ import {
   SHIPPING_PROVIDER,
   STORAGE_PROVIDER,
   STREAMING_PROVIDER,
+  IDENTITY_PROVIDERS,
 } from '../application/ports/tokens';
 import { PAYMENT_PROVIDER_PORT } from '../application/ports/payments';
 import { MemoryCacheStore } from './cache/memory-cache';
@@ -20,6 +21,8 @@ import {
 } from './cache/redis-cache';
 import { LiveKitStreamingProvider } from './providers/livekit.provider';
 import { SupabaseStorageProvider } from './providers/supabase-storage.provider';
+import { GoogleIdentityProvider } from './providers/google-identity.provider';
+import { FakeIdentityProvider } from './providers/fake-identity.provider';
 import { FakePaymentProvider } from './providers/fake-payment.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import { WebPushNotificationProvider } from './providers/web-push.provider';
@@ -102,6 +105,31 @@ const externalProviders: Provider[] = [
       env.NOTIFICATION_PROVIDER === 'webpush' ? new WebPushNotificationProvider(env) : log,
   },
   LocalStorageProvider,
+  {
+    /**
+     * Los proveedores de identidad habilitados, en el orden de `OAUTH_PROVIDERS`.
+     *
+     * Una lista y no un solo proveedor: acá conviven --Google y Meta son dos
+     * botones, no una eleccion-- a diferencia de los otros ejes, donde hay
+     * exactamente un adaptador activo. La lista vacia apaga el ingreso social y
+     * la pantalla no dibuja ningun boton.
+     */
+    provide: IDENTITY_PROVIDERS,
+    inject: [ENV],
+    useFactory: (env: AppEnv) =>
+      env.identityProviders.map((name) => {
+        if (name === 'google') return new GoogleIdentityProvider(env);
+        // `fake` se presenta **como Google**, a propósito: así desarrollo y la
+        // suite ejercitan exactamente las mismas rutas, el mismo botón y el
+        // mismo recorrido que producción. Un nombre de ruta distinto para
+        // pruebas seria una parte del sistema que nunca se ejecuta hasta que
+        // alguien la despliega.
+        //
+        // `meta` todavía no tiene adaptador propio; `env.ts` acepta el nombre
+        // para que las variables se puedan cargar antes de que exista.
+        return new FakeIdentityProvider(name === 'meta' ? 'meta' : 'google');
+      }),
+  },
   { provide: SHIPPING_PROVIDER, useClass: FlatRateShippingProvider },
   {
     /**
@@ -137,6 +165,7 @@ const persistence = PersistenceModule.register();
     SHIPPING_PROVIDER,
     STORAGE_PROVIDER,
     LocalStorageProvider,
+    IDENTITY_PROVIDERS,
     persistence,
   ],
 })

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { isWatchable } from '@vivo/domain';
 import type {
+  AuthProvider,
+  UserIdentity,
   Follow,
   LiveMessage,
   LiveSession,
@@ -32,6 +34,9 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  UserIdentityRepository,
+  LoginStateRepository,
+  LoginState,
   PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
@@ -74,9 +79,12 @@ export class MemoryUserRepository implements UserRepository {
     return passwordHash ? { userId: user.id, passwordHash } : null;
   }
 
-  async create(user: User, passwordHash: string): Promise<User> {
+  async create(user: User, passwordHash: string | null): Promise<User> {
     this.db.users.set(String(user.id), user);
-    this.db.credentials.set(String(user.id), passwordHash);
+    // Null no escribe nada: sin fila de credenciales,
+    // `findCredentialsByEmail` devuelve null y el login por contrasena falla
+    // como corresponde para una cuenta que solo se abre con un proveedor.
+    if (passwordHash !== null) this.db.credentials.set(String(user.id), passwordHash);
     return user;
   }
 
@@ -433,5 +441,58 @@ export class MemoryPushDeliveryRepository implements PushDeliveryRepository {
       if (entry.liveSessionId === liveSessionId && entry.type === type) total += 1;
     }
     return total;
+  }
+}
+
+/**
+ * Las formas de entrar, en memoria.
+ *
+ * La clave del mapa es `proveedor::idDelProveedor`, que es la misma clave
+ * primaria que en Postgres. Que las dos coincidan es lo que hace que las
+ * pruebas de contrato valgan: si el driver de memoria dedujera la identidad de
+ * otra manera, pasarían acá y fallarían en producción.
+ */
+@Injectable()
+export class MemoryUserIdentityRepository implements UserIdentityRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async find(provider: AuthProvider, providerUserId: string): Promise<UserIdentity | null> {
+    return this.db.userIdentities.get(`${provider}::${providerUserId}`) ?? null;
+  }
+
+  async listForUser(userId: UserId): Promise<UserIdentity[]> {
+    return [...this.db.userIdentities.values()].filter(
+      (identity) => String(identity.userId) === String(userId),
+    );
+  }
+
+  async link(identity: UserIdentity): Promise<UserIdentity> {
+    this.db.userIdentities.set(`${identity.provider}::${identity.providerUserId}`, identity);
+    return identity;
+  }
+}
+
+/**
+ * Los ingresos en vuelo, en memoria.
+ *
+ * `consume` es de un solo uso y por eso lee y escribe sin ceder el control en
+ * el medio: dos callbacks con el mismo `state` no pueden pasar los dos.
+ */
+@Injectable()
+export class MemoryLoginStateRepository implements LoginStateRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async create(state: LoginState): Promise<void> {
+    this.db.loginStates.set(state.state, state);
+  }
+
+  async consume(state: string, now: Date): Promise<LoginState | null> {
+    const pending = this.db.loginStates.get(state);
+    if (!pending) return null;
+    if (pending.consumedAt !== null) return null;
+    if (pending.expiresAt.getTime() <= now.getTime()) return null;
+
+    this.db.loginStates.set(state, { ...pending, consumedAt: now });
+    return pending;
   }
 }

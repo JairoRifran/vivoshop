@@ -7,6 +7,18 @@ const BASE_URL =
   process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 /**
+ * La base que tiene que usar **el navegador**, que no es la misma.
+ *
+ * `INTERNAL_API_URL` puede ser una dirección de red privada —el nombre del
+ * servicio dentro del host— y desde el navegador no resuelve. Todo lo que se
+ * renderiza como un enlace para hacer clic, como los botones de ingreso
+ * social, tiene que salir de acá.
+ */
+export function publicApiUrl(): string {
+  return (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
+}
+
+/**
  * Server-side API client.
  *
  * Every read in this app happens in a Server Component, which keeps the

@@ -28,6 +28,26 @@ const REALTIME_AUDIENCE = 'vivo-realtime';
 const REALTIME_TTL_MS = 30 * 60_000;
 
 /**
+ * El vale del ingreso social, y por qué la sesión no viaja por la URL.
+ *
+ * Al volver de Google, la API tiene una sesión y no puede escribirla: la cookie
+ * vive en el dominio de la web, que es otro origen. La salida obvia —mandar el
+ * JWT de sesión en la query— es la mala: las URLs quedan en el historial del
+ * navegador, en la cabecera `Referer` de la primera imagen que cargue esa
+ * página, y en los logs de cualquier proxy en el medio. Sería regalar una
+ * credencial de siete días en el lugar más público que hay.
+ *
+ * Así que viaja esto: un vale que dura un minuto, con audiencia propia. La API
+ * de sesión lo rechaza —`verify` comprueba la audiencia— así que lo único que
+ * se puede hacer con él es canjearlo, del lado del servidor de la web, una vez.
+ *
+ * Un minuto es lo que tarda una redirección. Lo que queda expuesto es esa
+ * ventana, y no siete días.
+ */
+const EXCHANGE_AUDIENCE = 'vivo-exchange';
+const EXCHANGE_TTL_MS = 60_000;
+
+/**
  * HS256 access tokens via `jose`, which is pure ESM/WebCrypto and works
  * unchanged on Node and on edge runtimes. Refresh tokens are deliberately out
  * of scope for M01; the seam is a second method on this service.
@@ -77,6 +97,26 @@ export class TokenService {
 
   async verifyRealtime(token: string): Promise<AccessTokenClaims | null> {
     return this.verifyFor(token, REALTIME_AUDIENCE);
+  }
+
+  /** Un vale de un minuto para canjear por la sesión. Ver `EXCHANGE_AUDIENCE`. */
+  async issueExchange(claims: AccessTokenClaims): Promise<IssuedToken> {
+    const expiresAt = new Date(Date.now() + EXCHANGE_TTL_MS);
+
+    const token = await new SignJWT({ roles: claims.roles })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(String(claims.userId))
+      .setIssuedAt()
+      .setIssuer('vivo-api')
+      .setAudience(EXCHANGE_AUDIENCE)
+      .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
+      .sign(this.secret);
+
+    return { token, expiresAt };
+  }
+
+  async verifyExchange(token: string): Promise<AccessTokenClaims | null> {
+    return this.verifyFor(token, EXCHANGE_AUDIENCE);
   }
 
   private async verifyFor(token: string, audience: string): Promise<AccessTokenClaims | null> {

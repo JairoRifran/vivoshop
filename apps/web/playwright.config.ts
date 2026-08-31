@@ -137,6 +137,15 @@ export default defineConfig({
           'BJxKjbfF4qLZ7VjXm2vQ8Y3nJ0hR5tWc9Dg1SsPoIuYtRe4WqAzXcVbNmKlJhGfDsAqWeRtYuIoPaSdFgHjKlZx',
         VAPID_PRIVATE_KEY: 'kZ8pQr3sTuVwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZ00',
         VAPID_SUBJECT: 'mailto:e2e@vivoshop.uy',
+        /**
+         * Ingreso social con el proveedor simulado, bajo el nombre `google`.
+         *
+         * Es lo que hace posible probar el recorrido entero sin hablar con
+         * `accounts.google.com` —que probaría a Google y fallaría cuando Google
+         * se cayera— y sin credenciales en el repositorio. Las rutas, el
+         * `state`, el PKCE, el vale y la sesión son los de producción.
+         */
+        OAUTH_PROVIDERS: 'fake',
       },
     },
     {

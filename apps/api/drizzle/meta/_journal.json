@@ -71,6 +71,13 @@
       "when": 1787835472237,
       "tag": "0009_simple_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788184182021,
+      "tag": "0010_lazy_devos",
+      "breakpoints": true
     }
   ]
 }

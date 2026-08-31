@@ -1,5 +1,7 @@
 import type { CurrencyCode } from '@vivo/config';
 import type {
+  AuthProvider,
+  ProviderProfile,
   LiveCapabilities,
   LiveSessionId,
   Order,
@@ -228,6 +230,36 @@ export interface StoredFile {
  * alguien ponga en su avatar la foto de otro —o una baliza de un servidor
  * ajeno—. La comprobación vive en `assertOwnMediaKey`, en el dominio.
  */
+/**
+ * Un tercero que afirma quien es alguien.
+ *
+ * Dos metodos y ninguna decision de producto: manda a la persona al proveedor,
+ * y despues cambia el codigo por un perfil. **A quien pertenece ese perfil
+ * --entrar, vincular, registrar o pedir la contrasena-- lo decide el dominio**,
+ * en `resolveIdentityOutcome`. Es la misma separacion que hace que el adaptador
+ * de Mercado Pago no sepa de comisiones.
+ */
+export interface IdentityProvider {
+  readonly key: AuthProvider;
+  /**
+   * A donde mandar a la persona.
+   *
+   * `codeChallenge` es PKCE: el verificador queda del lado del servidor, asi
+   * que un codigo de autorizacion interceptado --en un historial, en un log de
+   * un proxy, en un `Referer`-- no se puede canjear sin el.
+   */
+  authorizationUrl(input: {
+    state: string;
+    codeChallenge: string;
+    redirectUri: string;
+  }): string;
+  exchange(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<ProviderProfile>;
+}
+
 export interface StorageProvider {
   readonly key: string;
   /**

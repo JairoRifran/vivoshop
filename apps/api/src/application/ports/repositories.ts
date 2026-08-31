@@ -1,4 +1,5 @@
 import type {
+  AuthProvider,
   Follow,
   LiveMessage,
   LiveSession,
@@ -17,6 +18,7 @@ import type {
   StoreId,
   User,
   UserId,
+  UserIdentity,
 } from '@vivo/domain';
 
 /**
@@ -36,8 +38,43 @@ export interface UserRepository {
   findById(id: UserId): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
   findCredentialsByEmail(email: string): Promise<StoredCredentials | null>;
-  create(user: User, passwordHash: string): Promise<User>;
+  /**
+   * `passwordHash` es null para una cuenta que solo se abre con un proveedor.
+   *
+   * El login por contrasena tiene que leer ese null como credenciales
+   * invalidas --nunca como "no hace falta contrasena"--.
+   */
+  create(user: User, passwordHash: string | null): Promise<User>;
   update(user: User): Promise<User>;
+}
+
+/**
+ * El `state` del ingreso social, en vuelo.
+ *
+ * Se emite antes de mandar a la persona al proveedor y se consume **una sola
+ * vez** al volver: sin eso, un `state` reutilizable deja de proteger contra
+ * CSRF, que es lo unico para lo que existe.
+ */
+export interface LoginState {
+  readonly state: string;
+  readonly provider: AuthProvider;
+  readonly codeVerifier: string;
+  readonly returnTo: string;
+  readonly createdAt: Date;
+  readonly expiresAt: Date;
+  readonly consumedAt: Date | null;
+}
+
+export interface LoginStateRepository {
+  create(state: LoginState): Promise<void>;
+  /** Devuelve el estado y lo marca usado, o null si no existe/vencio/ya se uso. */
+  consume(state: string, now: Date): Promise<LoginState | null>;
+}
+
+export interface UserIdentityRepository {
+  find(provider: AuthProvider, providerUserId: string): Promise<UserIdentity | null>;
+  listForUser(userId: UserId): Promise<UserIdentity[]>;
+  link(identity: UserIdentity): Promise<UserIdentity>;
 }
 
 export interface StoreQuery {
