@@ -26,6 +26,13 @@ export interface User {
    * porque nadie lee un parrafo debajo de una foto de perfil.
    */
   readonly bio: string | null;
+  /**
+   * Cuando se cambio la contrasena por ultima vez. Null si nunca.
+   *
+   * Es la fecha de corte de las sesiones: un JWT emitido antes esta muerto.
+   * Ver `isSessionStillValid`.
+   */
+  readonly passwordChangedAt: Date | null;
   readonly country: CountryCode;
   readonly roles: readonly UserRole[];
   readonly status: UserStatus;

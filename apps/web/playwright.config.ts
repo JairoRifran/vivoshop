@@ -146,6 +146,15 @@ export default defineConfig({
          * `state`, el PKCE, el vale y la sesión son los de producción.
          */
         OAUTH_PROVIDERS: 'fake',
+        /**
+         * El correo al log, y la base publica apuntando a *este* puerto.
+         *
+         * `WEB_PUBLIC_URL` importa: es lo que la API pone en el enlace del
+         * correo. Con el valor por defecto el enlace apuntaria a un servidor
+         * que en esta corrida no existe.
+         */
+        EMAIL_PROVIDER: 'log',
+        WEB_PUBLIC_URL: WEB_URL,
       },
     },
     {

@@ -12,6 +12,7 @@ const NOTICES: Record<string, string> = {
   verificar:
     'Ya existe una cuenta con ese email. Ingresá con tu contraseña una vez y después vas a poder entrar con Google.',
   social: 'No pudimos completar el ingreso. Probá de nuevo.',
+  contrasena: 'Cambiamos tu contraseña y cerramos todas las sesiones. Ingresá de nuevo.',
 };
 
 export default async function SignInPage({
@@ -26,10 +27,14 @@ export default async function SignInPage({
   // instalación sin credenciales de Google no debe mostrar un botón que lleva
   // a un error, y agregar Meta no tiene por qué exigir recompilar la web.
   const client = await api();
-  const { providers } = await safe(
-    client.request<{ providers: string[] }>('GET', '/auth/providers'),
-    { providers: [] },
-  );
+  // Las dos son independientes: que haya botones de proveedor no dice nada
+  // sobre si hay correo para recuperar, y al reves tampoco.
+  const [{ providers }, { canRecover }] = await Promise.all([
+    safe(client.request<{ providers: string[] }>('GET', '/auth/providers'), { providers: [] }),
+    safe(client.request<{ canRecover: boolean }>('GET', '/auth/password/status'), {
+      canRecover: false,
+    }),
+  ]);
 
   const notice = NOTICES[motivo ?? ''] ?? NOTICES[error ?? ''];
 
@@ -44,7 +49,7 @@ export default async function SignInPage({
         </p>
       ) : null}
 
-      <SignInForm next={next ?? '/'} defaultEmail={email ?? ''} />
+      <SignInForm next={next ?? '/'} defaultEmail={email ?? ''} canRecover={canRecover} />
       <SocialSignIn providers={providers} next={next ?? '/'} />
     </div>
   );

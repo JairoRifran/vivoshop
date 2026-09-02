@@ -29,6 +29,10 @@ const PRODUCTION: NodeJS.ProcessEnv = {
   // Vacío desde M07: el ingreso social apagado es una producción válida, y el
   // proveedor simulado está prohibido allá. Ver el bloque de abajo.
   OAUTH_PROVIDERS: '',
+  // Obligatorio desde M08: `log` escribiría los correos en la consola y la
+  // pantalla prometería un email que nunca sale. `none` apaga la recuperación
+  // de frente, que es una producción válida.
+  EMAIL_PROVIDER: 'none',
 };
 
 const SHA = 'cd206a699103e727f7929f0279f09e8b96cf6e58';
@@ -198,5 +202,36 @@ describe('con qué se puede ingresar', () => {
   it('un nombre mal escrito frena el despliegue', () => {
     // Tiene que fallar al arrancar y no aparecer como un botón que no hace nada.
     expect(() => loadEnv({ ...BASE, OAUTH_PROVIDERS: 'gogle' })).toThrow(/gogle/);
+  });
+});
+
+describe('cómo se manda el correo', () => {
+  it('en desarrollo va al log', () => {
+    expect(loadEnv(BASE).EMAIL_PROVIDER).toBe('log');
+  });
+
+  it('producción con el log no arranca', () => {
+    // Sería peor que no tener la función: la pantalla dice "te mandamos un
+    // email" y quien perdió su contraseña se queda esperando sin ver un error.
+    expect(() => loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'log' })).toThrow(/no envía nada/);
+  });
+
+  it('producción sin recuperación es válida', () => {
+    // Mejor apagarla de frente que fingirla.
+    expect(loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'none' }).EMAIL_PROVIDER).toBe('none');
+  });
+
+  it('resend sin clave no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'resend' })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it('resend con clave arranca', () => {
+    const env = loadEnv({
+      ...PRODUCTION,
+      EMAIL_PROVIDER: 'resend',
+      RESEND_API_KEY: 'clave-de-resend',
+    });
+
+    expect(env.EMAIL_PROVIDER).toBe('resend');
   });
 });

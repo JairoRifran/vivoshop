@@ -50,6 +50,7 @@ export class AuthService {
       phone: input.phone ?? null,
       avatarUrl: null,
       bio: null,
+      passwordChangedAt: null,
       country: input.country,
       roles: ['buyer'],
       status: 'active',

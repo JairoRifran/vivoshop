@@ -30,6 +30,8 @@ export const STORAGE_PROVIDER = Symbol('StorageProvider');
 export const IDENTITY_PROVIDERS = Symbol('IdentityProviders');
 export const USER_IDENTITY_REPOSITORY = Symbol('UserIdentityRepository');
 export const LOGIN_STATE_REPOSITORY = Symbol('LoginStateRepository');
+export const EMAIL_PROVIDER = Symbol('EmailProvider');
+export const PASSWORD_RESET_REPOSITORY = Symbol('PasswordResetRepository');
 
 export const CLOCK = Symbol('Clock');
 export const ID_GENERATOR = Symbol('IdGenerator');

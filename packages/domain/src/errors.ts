@@ -91,7 +91,16 @@ export type DomainErrorCode =
   /** El proveedor de identidad refuso o esta inalcanzable. */
   | 'IDENTITY_UNAVAILABLE'
   /** Ese proveedor no esta habilitado en esta instalacion. */
-  | 'IDENTITY_PROVIDER_DISABLED';
+  | 'IDENTITY_PROVIDER_DISABLED'
+  // --- Contrasenas (M08) -------------------------------------------------
+  /** Falta la contrasena actual, y esta cuenta tiene una. */
+  | 'CURRENT_PASSWORD_REQUIRED'
+  /** La contrasena actual no coincide. */
+  | 'CURRENT_PASSWORD_INVALID'
+  /** El enlace para restablecer vencio, ya se uso, o no existe. */
+  | 'RESET_TOKEN_INVALID'
+  /** El proveedor de correo refuso o esta inalcanzable. */
+  | 'EMAIL_UNAVAILABLE';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

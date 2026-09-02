@@ -262,6 +262,7 @@ export class SocialAuthService {
         phone: null,
         avatarUrl: null,
         bio: null,
+        passwordChangedAt: null,
         country: 'UY',
         roles: ['buyer'],
         status: 'active',

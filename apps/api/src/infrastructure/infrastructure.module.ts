@@ -9,6 +9,7 @@ import {
   STORAGE_PROVIDER,
   STREAMING_PROVIDER,
   IDENTITY_PROVIDERS,
+  EMAIL_PROVIDER,
 } from '../application/ports/tokens';
 import { PAYMENT_PROVIDER_PORT } from '../application/ports/payments';
 import { MemoryCacheStore } from './cache/memory-cache';
@@ -23,6 +24,7 @@ import { LiveKitStreamingProvider } from './providers/livekit.provider';
 import { SupabaseStorageProvider } from './providers/supabase-storage.provider';
 import { GoogleIdentityProvider } from './providers/google-identity.provider';
 import { FakeIdentityProvider } from './providers/fake-identity.provider';
+import { LogEmailProvider, ResendEmailProvider } from './providers/email.providers';
 import { FakePaymentProvider } from './providers/fake-payment.provider';
 import { MercadoPagoProvider } from './providers/mercadopago.provider';
 import { WebPushNotificationProvider } from './providers/web-push.provider';
@@ -130,6 +132,20 @@ const externalProviders: Provider[] = [
         return new FakeIdentityProvider(name === 'meta' ? 'meta' : 'google');
       }),
   },
+  {
+    /**
+     * `log` escribe el correo en la consola y es el default; `resend` lo manda.
+     * `none` tambien cae en `log` --nadie lo va a llamar, porque el servicio
+     * comprueba `canRecover` antes-- y asi no hay una rama nula que mantener.
+     *
+     * `log` esta prohibido en produccion: la pantalla prometeria un correo que
+     * nunca sale. Lo corta `env.ts`.
+     */
+    provide: EMAIL_PROVIDER,
+    inject: [ENV],
+    useFactory: (env: AppEnv) =>
+      env.EMAIL_PROVIDER === 'resend' ? new ResendEmailProvider(env) : new LogEmailProvider(),
+  },
   { provide: SHIPPING_PROVIDER, useClass: FlatRateShippingProvider },
   {
     /**
@@ -166,6 +182,7 @@ const persistence = PersistenceModule.register();
     STORAGE_PROVIDER,
     LocalStorageProvider,
     IDENTITY_PROVIDERS,
+    EMAIL_PROVIDER,
     persistence,
   ],
 })

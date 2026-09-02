@@ -56,6 +56,22 @@ export const updateProfileRequestSchema = z.object({
 });
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
 
+export const forgotPasswordRequestSchema = z.object({ email: emailSchema });
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+export const resetPasswordRequestSchema = z.object({
+  token: z.string().min(1).max(512),
+  password: passwordSchema,
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
+export const changePasswordRequestSchema = z.object({
+  /** Ausente cuando la cuenta todavia no tiene contrasena. Ver `assertCanChangePassword`. */
+  currentPassword: z.string().max(200).optional(),
+  password: passwordSchema,
+});
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
+
 // --- Seller onboarding ---------------------------------------------------------
 
 export const createStoreRequestSchema = z.object({

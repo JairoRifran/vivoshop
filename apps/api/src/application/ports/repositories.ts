@@ -19,6 +19,7 @@ import type {
   User,
   UserId,
   UserIdentity,
+  PasswordResetToken,
 } from '@vivo/domain';
 
 /**
@@ -45,6 +46,15 @@ export interface UserRepository {
    * invalidas --nunca como "no hace falta contrasena"--.
    */
   create(user: User, passwordHash: string | null): Promise<User>;
+  /**
+   * Escribe la contrasena y **fecha el corte de sesiones** en la misma
+   * operacion.
+   *
+   * Los dos juntos a proposito: separarlos deja una ventana en la que la
+   * contrasena ya cambio y las sesiones viejas siguen valiendo, que es
+   * exactamente lo que se esta tratando de cerrar.
+   */
+  setPassword(id: UserId, passwordHash: string, changedAt: Date): Promise<void>;
   update(user: User): Promise<User>;
 }
 
@@ -69,6 +79,19 @@ export interface LoginStateRepository {
   create(state: LoginState): Promise<void>;
   /** Devuelve el estado y lo marca usado, o null si no existe/vencio/ya se uso. */
   consume(state: string, now: Date): Promise<LoginState | null>;
+}
+
+export interface PasswordResetRepository {
+  create(token: PasswordResetToken): Promise<void>;
+  /** Devuelve el permiso y lo marca usado, o null si no sirve. Un solo uso. */
+  consume(tokenHash: string, now: Date): Promise<PasswordResetToken | null>;
+  /**
+   * Invalida todos los pendientes de esa persona.
+   *
+   * Quien pidio tres correos y uso el ultimo no deberia quedarse con dos llaves
+   * mas dando vueltas en su buzon.
+   */
+  consumeAllFor(userId: UserId, now: Date): Promise<void>;
 }
 
 export interface UserIdentityRepository {

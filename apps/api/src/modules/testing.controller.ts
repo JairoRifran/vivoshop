@@ -17,8 +17,10 @@ import { ENV, type AppEnv } from '../config/env';
 import { MemoryDatabase } from '../infrastructure/persistence/memory/memory-database';
 import { PasswordService } from '../infrastructure/security/password.service';
 import { asLiveSessionId } from '@vivo/domain';
-import { PUSH_DELIVERY_REPOSITORY } from '../application/ports/tokens';
+import { EMAIL_PROVIDER, PUSH_DELIVERY_REPOSITORY } from '../application/ports/tokens';
 import type { PushDeliveryRepository } from '../application/ports/repositories';
+import type { EmailProvider } from '../application/ports/infrastructure';
+import { LogEmailProvider } from '../infrastructure/providers/email.providers';
 import { ApplicationModule } from '../application/application.module';
 import { PaymentService } from '../application/services/payment.service';
 
@@ -62,6 +64,7 @@ export class TestingController {
     private readonly payments: PaymentService,
     @Inject(PUSH_DELIVERY_REPOSITORY)
     private readonly pushDeliveries: PushDeliveryRepository,
+    @Inject(EMAIL_PROVIDER) private readonly email: EmailProvider,
   ) {}
 
   /**
@@ -109,6 +112,32 @@ export class TestingController {
    * que sí se puede afirmar —y es donde vive la garantía— es cuántas
    * constancias quedaron en la base.
    */
+  /**
+   * El último correo que se "envió".
+   *
+   * Sin buzón en la suite, es la única forma de que el token que usa el
+   * navegador sea el real —el que salió de la base, de un solo uso y con
+   * vencimiento— y no uno que la prueba se inventó.
+   *
+   * Solo con `EMAIL_PROVIDER=log`. Con cualquier otro devuelve 403, así que no
+   * queda como una ventana a los correos de nadie.
+   */
+  @Public()
+  @Get('last-email')
+  lastEmail(@Headers('x-e2e-reset') token: string | undefined) {
+    this.assertAllowed(token);
+
+    if (!(this.email instanceof LogEmailProvider)) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'No disponible.' });
+    }
+
+    const last = this.email.lastEmail();
+    if (!last) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'No se envió ningún correo.' });
+    }
+    return last;
+  }
+
   @Public()
   @Get('push-deliveries/:liveSessionId')
   async deliveries(

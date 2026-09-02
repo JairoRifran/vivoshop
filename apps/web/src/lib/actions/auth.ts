@@ -109,3 +109,71 @@ export async function updateProfile(
   revalidatePath('/', 'layout');
   return success('Guardamos tu perfil.');
 }
+
+/**
+ * Pide el enlace para restablecer la contraseña.
+ *
+ * Devuelve éxito **siempre**, exista o no la cuenta — la API hace lo mismo. Si
+ * la pantalla distinguiera, el formulario sería un padrón de quién tiene cuenta
+ * acá. El mensaje dice "si esa dirección tiene cuenta", que es cierto y no
+ * revela nada.
+ */
+export async function requestPasswordReset(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.request('POST', '/auth/password/forgot', { email: text(form, 'email') });
+  } catch (error) {
+    return failure(error);
+  }
+
+  return success('Si esa dirección tiene una cuenta, te mandamos un correo con el enlace.');
+}
+
+/** Elige una contraseña nueva con el enlace del correo. */
+export async function resetPassword(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.request('POST', '/auth/password/reset', {
+      token: text(form, 'token'),
+      password: text(form, 'password'),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  return success('Listo. Ya podés ingresar con tu contraseña nueva.');
+}
+
+/**
+ * Cambia la contraseña estando adentro.
+ *
+ * Después de cambiarla, **esta sesión también muere**: el servidor corta todas
+ * las anteriores al cambio, y la que hizo el cambio se emitió antes. Así que se
+ * borra la cookie y se manda a ingresar de nuevo, que es honesto —lo contrario
+ * sería una pantalla que funciona hasta que deja de funcionar sin explicación—.
+ */
+export async function changePassword(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const current = text(form, 'currentPassword');
+
+  try {
+    const client = await api();
+    await client.request('POST', '/auth/password/change', {
+      ...(current ? { currentPassword: current } : {}),
+      password: text(form, 'password'),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  await clearToken();
+  redirect('/ingresar?motivo=contrasena');
+}

@@ -3,10 +3,32 @@ import type { UserId, UserRole } from '@vivo/domain';
 import { asUserId } from '@vivo/domain';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { ENV, type AppEnv } from '../../config/env';
+import type { Clock } from '../../application/ports/infrastructure';
+import { CLOCK } from '../../application/ports/tokens';
 
+/** Lo que hay que decir para pedir un token. */
 export interface AccessTokenClaims {
   readonly userId: UserId;
   readonly roles: readonly UserRole[];
+}
+
+/**
+ * Lo que vuelve al verificar uno, que es mas de lo que se pidio.
+ *
+ * Separado a proposito: `issuedAtSeconds` lo pone la firma --`setIssuedAt`--,
+ * no quien emite. Pedirselo al que llama seria inventar un dato que el no tiene
+ * y que ademas no se le debe creer.
+ */
+export interface VerifiedClaims extends AccessTokenClaims {
+  /**
+   * `iat` del token, en segundos desde epoch. Cero si el token no lo trae.
+   *
+   * Lo usa el guard para descartar sesiones anteriores al ultimo cambio de
+   * contrasena. Cero --imposible en la practica, porque siempre se firma con
+   * `setIssuedAt`-- se comporta como la sesion mas vieja que existe, asi que un
+   * cambio de contrasena la mata. Es el default seguro.
+   */
+  readonly issuedAtSeconds: number;
 }
 
 export interface IssuedToken {
@@ -56,17 +78,30 @@ const EXCHANGE_TTL_MS = 60_000;
 export class TokenService {
   private readonly secret: Uint8Array;
 
-  constructor(@Inject(ENV) private readonly env: AppEnv) {
+  /**
+   * El reloj es el mismo que usa el resto de la aplicación, y eso importa.
+   *
+   * Antes esto firmaba con `Date.now()`. Mientras el `iat` de un token solo
+   * servía para vencer, daba igual; desde que **decide si una sesión sobrevive
+   * a un cambio de contraseña**, comparar dos relojes distintos es comparar
+   * cualquier cosa. Con un reloj adelantado en una prueba, el corte quedaba en
+   * el futuro y mataba hasta las sesiones recién emitidas.
+   */
+  constructor(
+    @Inject(ENV) private readonly env: AppEnv,
+    @Inject(CLOCK) private readonly clock: Clock,
+  ) {
     this.secret = new TextEncoder().encode(env.JWT_SECRET);
   }
 
   async issue(claims: AccessTokenClaims): Promise<IssuedToken> {
-    const expiresAt = new Date(Date.now() + parseDuration(this.env.JWT_EXPIRES_IN));
+    const now = this.clock.now();
+    const expiresAt = new Date(now.getTime() + parseDuration(this.env.JWT_EXPIRES_IN));
 
     const token = await new SignJWT({ roles: claims.roles })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(String(claims.userId))
-      .setIssuedAt()
+      .setIssuedAt(Math.floor(now.getTime() / 1000))
       .setIssuer('vivo-api')
       .setAudience('vivo-clients')
       .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
@@ -75,18 +110,19 @@ export class TokenService {
     return { token, expiresAt };
   }
 
-  async verify(token: string): Promise<AccessTokenClaims | null> {
+  async verify(token: string): Promise<VerifiedClaims | null> {
     return this.verifyFor(token, 'vivo-clients');
   }
 
   /** A credential for the WebSocket handshake, and nothing else. */
   async issueRealtime(claims: AccessTokenClaims): Promise<IssuedToken> {
-    const expiresAt = new Date(Date.now() + REALTIME_TTL_MS);
+    const now = this.clock.now();
+    const expiresAt = new Date(now.getTime() + REALTIME_TTL_MS);
 
     const token = await new SignJWT({ roles: claims.roles })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(String(claims.userId))
-      .setIssuedAt()
+      .setIssuedAt(Math.floor(now.getTime() / 1000))
       .setIssuer('vivo-api')
       .setAudience(REALTIME_AUDIENCE)
       .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
@@ -95,18 +131,19 @@ export class TokenService {
     return { token, expiresAt };
   }
 
-  async verifyRealtime(token: string): Promise<AccessTokenClaims | null> {
+  async verifyRealtime(token: string): Promise<VerifiedClaims | null> {
     return this.verifyFor(token, REALTIME_AUDIENCE);
   }
 
   /** Un vale de un minuto para canjear por la sesión. Ver `EXCHANGE_AUDIENCE`. */
   async issueExchange(claims: AccessTokenClaims): Promise<IssuedToken> {
-    const expiresAt = new Date(Date.now() + EXCHANGE_TTL_MS);
+    const now = this.clock.now();
+    const expiresAt = new Date(now.getTime() + EXCHANGE_TTL_MS);
 
     const token = await new SignJWT({ roles: claims.roles })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(String(claims.userId))
-      .setIssuedAt()
+      .setIssuedAt(Math.floor(now.getTime() / 1000))
       .setIssuer('vivo-api')
       .setAudience(EXCHANGE_AUDIENCE)
       .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
@@ -115,15 +152,19 @@ export class TokenService {
     return { token, expiresAt };
   }
 
-  async verifyExchange(token: string): Promise<AccessTokenClaims | null> {
+  async verifyExchange(token: string): Promise<VerifiedClaims | null> {
     return this.verifyFor(token, EXCHANGE_AUDIENCE);
   }
 
-  private async verifyFor(token: string, audience: string): Promise<AccessTokenClaims | null> {
+  private async verifyFor(token: string, audience: string): Promise<VerifiedClaims | null> {
     try {
       const { payload } = await jwtVerify(token, this.secret, {
         issuer: 'vivo-api',
         audience,
+        // El mismo reloj con el que se firma. Sin esto, emitir con el reloj
+        // inyectado y verificar contra el del sistema son dos relojes
+        // distintos, y un token recien emitido puede nacer vencido.
+        currentDate: this.clock.now(),
       });
       return toClaims(payload);
     } catch {
@@ -132,12 +173,13 @@ export class TokenService {
   }
 }
 
-function toClaims(payload: JWTPayload): AccessTokenClaims | null {
+function toClaims(payload: JWTPayload): VerifiedClaims | null {
   if (typeof payload.sub !== 'string' || payload.sub.length === 0) return null;
   const roles = Array.isArray(payload.roles)
     ? (payload.roles.filter((role): role is UserRole => typeof role === 'string') as UserRole[])
     : [];
-  return { userId: asUserId(payload.sub), roles };
+  const issuedAtSeconds = typeof payload.iat === 'number' ? payload.iat : 0;
+  return { userId: asUserId(payload.sub), roles, issuedAtSeconds };
 }
 
 /** Accepts `900s`, `15m`, `24h`, `7d`. Falls back to seven days. */

@@ -264,6 +264,7 @@ function buildUsers(now: Date): DemoUser[] {
     phone: blueprint.phone,
     avatarUrl: `/media/avatar/${blueprint.key}`,
     bio: blueprint.bio ?? null,
+    passwordChangedAt: null,
     country: 'UY' as const,
     roles: blueprint.seller ? (['buyer', 'seller'] as const) : (['buyer'] as const),
     status: 'active' as const,

@@ -241,6 +241,27 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
+
+  // --- Correo (M08) ------------------------------------------------------
+  /**
+   * Como se manda el correo. Hoy solo lo usa el restablecimiento de contrasena.
+   *
+   * `log` lo escribe en la consola y es el default: un clon del repositorio
+   * recorre el flujo entero sin contratar nada. En produccion esta **prohibido**
+   * --la pantalla diria "te mandamos un email" y nadie recibiria nada, dejando
+   * a alguien esperando algo que nunca llega--.
+   *
+   * `none` apaga la recuperacion por completo, y es una produccion valida: la
+   * pantalla no ofrece "olvide mi contrasena" y nadie queda esperando. Es mejor
+   * no tener la funcion que fingirla.
+   */
+  EMAIL_PROVIDER: z.enum(['log', 'none', 'resend']).default('log'),
+  /** Nunca sale del servidor. Nunca se loguea. */
+  RESEND_API_KEY: z.string().optional(),
+  /** El remitente. Su dominio tiene que estar verificado en Resend. */
+  EMAIL_FROM: z.string().default('VivoShop <hola@vivoshop.uy>'),
+  /** Base publica de la web, para armar el enlace del correo. */
+  WEB_PUBLIC_URL: z.string().optional(),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
@@ -371,6 +392,18 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     throw new Error(
       'OAUTH_PROVIDERS=fake entrega una cuenta de demostración a cualquiera. ' +
         'En producción usá google (o dejá OAUTH_PROVIDERS vacío para apagar el ingreso social).',
+    );
+  }
+  if (env.EMAIL_PROVIDER === 'resend' && !env.RESEND_API_KEY) {
+    throw new Error('EMAIL_PROVIDER=resend requiere RESEND_API_KEY');
+  }
+  // `log` en produccion es peor que no tener la funcion: la pantalla promete un
+  // correo que nunca sale, y quien perdio su contrasena se queda esperando sin
+  // ver un solo error. Si todavia no hay proveedor, `none` la apaga de frente.
+  if (env.NODE_ENV === 'production' && env.EMAIL_PROVIDER === 'log') {
+    throw new Error(
+      'EMAIL_PROVIDER=log escribe los correos en la consola y no envía nada. ' +
+        'En producción usá resend, o none para apagar la recuperación de contraseña.',
     );
   }
   if (env.NOTIFICATION_PROVIDER === 'webpush') {

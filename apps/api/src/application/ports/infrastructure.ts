@@ -231,6 +231,25 @@ export interface StoredFile {
  * ajeno—. La comprobación vive en `assertOwnMediaKey`, en el dominio.
  */
 /**
+ * Mandar un correo.
+ *
+ * Deliberadamente angosto: un destinatario, un asunto y un cuerpo. No hay
+ * plantillas, ni adjuntos, ni listas. Lo unico que manda correo en VivoShop hoy
+ * es el restablecimiento de contrasena, y un puerto que prometa mas de lo que
+ * se usa es un puerto que nadie sabe si funciona.
+ */
+export interface EmailProvider {
+  readonly key: string;
+  send(input: {
+    to: string;
+    subject: string;
+    /** Texto plano. Es el cuerpo real: no todos los clientes muestran HTML. */
+    text: string;
+    html?: string;
+  }): Promise<void>;
+}
+
+/**
  * Un tercero que afirma quien es alguien.
  *
  * Dos metodos y ninguna decision de producto: manda a la persona al proveedor,

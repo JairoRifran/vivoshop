@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   AuthProvider,
   UserIdentity,
+  PasswordResetToken,
   Follow,
   LiveMessage,
   LiveSession,
@@ -36,6 +37,7 @@ import type {
   UserRepository,
   LoginState,
   LoginStateRepository,
+  PasswordResetRepository,
   UserIdentityRepository,
   PushDeliveryRepository,
   PushSubscriptionRepository,
@@ -98,6 +100,15 @@ export class DrizzleUserRepository implements UserRepository {
     // proveedor. Devolver null hace que el login por contrasena falle como
     // "email o contrasena incorrectos", que es exactamente lo correcto.
     return row?.passwordHash ? { userId: row.id as UserId, passwordHash: row.passwordHash } : null;
+  }
+
+  async setPassword(id: UserId, passwordHash: string, changedAt: Date): Promise<void> {
+    // Un solo UPDATE: separarlos dejaria una ventana con la contrasena nueva y
+    // las sesiones viejas todavia validas, que es lo que se esta cerrando.
+    await this.db
+      .update(t.users)
+      .set({ passwordHash, passwordChangedAt: changedAt, updatedAt: changedAt })
+      .where(eq(t.users.id, String(id)));
   }
 
   async create(user: User, passwordHash: string | null): Promise<User> {
@@ -815,4 +826,65 @@ function toUserIdentity(row: {
     email: row.email,
     createdAt: row.createdAt,
   };
+}
+
+
+/**
+ * Permisos de restablecimiento, en Postgres.
+ *
+ * `consume` es **una sola sentencia**: el `update` filtra por no consumido y no
+ * vencido, y devuelve la fila solo si el la marco. Dos pestanas con el mismo
+ * enlace compiten en la base y gana una; la otra recibe cero filas. Leer y
+ * despues escribir tendria una ventana entre las dos operaciones, y en un
+ * permiso de un solo uso esa ventana es el agujero.
+ */
+@Injectable()
+export class DrizzlePasswordResetRepository implements PasswordResetRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async create(token: PasswordResetToken): Promise<void> {
+    await this.db.insert(t.passwordResetTokens).values({
+      tokenHash: token.tokenHash,
+      userId: String(token.userId),
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      consumedAt: null,
+    });
+  }
+
+  async consume(tokenHash: string, now: Date): Promise<PasswordResetToken | null> {
+    const [row] = await this.db
+      .update(t.passwordResetTokens)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(t.passwordResetTokens.tokenHash, tokenHash),
+          isNull(t.passwordResetTokens.consumedAt),
+          gt(t.passwordResetTokens.expiresAt, now),
+        ),
+      )
+      .returning();
+
+    return row
+      ? {
+          tokenHash: row.tokenHash,
+          userId: asUserId(row.userId),
+          createdAt: row.createdAt,
+          expiresAt: row.expiresAt,
+          consumedAt: null,
+        }
+      : null;
+  }
+
+  async consumeAllFor(userId: UserId, now: Date): Promise<void> {
+    await this.db
+      .update(t.passwordResetTokens)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(t.passwordResetTokens.userId, String(userId)),
+          isNull(t.passwordResetTokens.consumedAt),
+        ),
+      );
+  }
 }

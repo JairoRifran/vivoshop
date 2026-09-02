@@ -3,6 +3,7 @@ import { isWatchable } from '@vivo/domain';
 import type {
   AuthProvider,
   UserIdentity,
+  PasswordResetToken,
   Follow,
   LiveMessage,
   LiveSession,
@@ -37,6 +38,7 @@ import type {
   UserIdentityRepository,
   LoginStateRepository,
   LoginState,
+  PasswordResetRepository,
   PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
@@ -91,6 +93,16 @@ export class MemoryUserRepository implements UserRepository {
   async update(user: User): Promise<User> {
     this.db.users.set(String(user.id), user);
     return user;
+  }
+
+  async setPassword(id: UserId, passwordHash: string, changedAt: Date): Promise<void> {
+    const user = this.db.users.get(String(id));
+    if (!user) return;
+
+    this.db.credentials.set(String(id), passwordHash);
+    // Los dos juntos: separarlos dejaria una ventana con la contrasena nueva y
+    // las sesiones viejas todavia validas.
+    this.db.users.set(String(id), { ...user, passwordChangedAt: changedAt, updatedAt: changedAt });
   }
 }
 
@@ -494,5 +506,40 @@ export class MemoryLoginStateRepository implements LoginStateRepository {
 
     this.db.loginStates.set(state, { ...pending, consumedAt: now });
     return pending;
+  }
+}
+
+
+/**
+ * Permisos de restablecimiento, en memoria.
+ *
+ * La clave del mapa es el hash del token, igual que la clave primaria en
+ * Postgres. Que coincidan es lo que hace que las pruebas contra este driver
+ * digan algo sobre el otro.
+ */
+@Injectable()
+export class MemoryPasswordResetRepository implements PasswordResetRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async create(token: PasswordResetToken): Promise<void> {
+    this.db.passwordResets.set(token.tokenHash, token);
+  }
+
+  async consume(tokenHash: string, now: Date): Promise<PasswordResetToken | null> {
+    const pending = this.db.passwordResets.get(tokenHash);
+    if (!pending) return null;
+    if (pending.consumedAt !== null) return null;
+    if (pending.expiresAt.getTime() <= now.getTime()) return null;
+
+    this.db.passwordResets.set(tokenHash, { ...pending, consumedAt: now });
+    return pending;
+  }
+
+  async consumeAllFor(userId: UserId, now: Date): Promise<void> {
+    for (const [hash, token] of this.db.passwordResets) {
+      if (String(token.userId) === String(userId) && token.consumedAt === null) {
+        this.db.passwordResets.set(hash, { ...token, consumedAt: now });
+      }
+    }
   }
 }

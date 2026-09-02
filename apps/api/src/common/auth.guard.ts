@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { isSessionStillValid } from '@vivo/domain';
 import type { User, UserId, UserRole } from '@vivo/domain';
 import type { Request } from 'express';
 import type { UserRepository } from '../application/ports/repositories';
@@ -63,7 +64,25 @@ export class JwtAuthGuard implements CanActivate {
     const claims = await this.tokens.verify(token);
     const user = claims ? await this.users.findById(claims.userId as UserId) : null;
 
-    if (!user || user.status !== 'active') {
+    /**
+     * Una sesion anterior al ultimo cambio de contrasena esta muerta.
+     *
+     * Es lo que hace que cambiar la contrasena eche de verdad a quien haya
+     * entrado. Nuestros JWT no se revocan de a uno --son sin estado, y esa es
+     * la gracia-- pero si se puede fechar el corte.
+     *
+     * No cuesta una consulta mas: el usuario ya se carga aca para comprobar que
+     * siga activo. Ver `isSessionStillValid`.
+     */
+    const sessionAlive =
+      user !== null &&
+      claims !== null &&
+      isSessionStillValid({
+        issuedAtSeconds: claims.issuedAtSeconds,
+        passwordChangedAt: user.passwordChangedAt,
+      });
+
+    if (!user || user.status !== 'active' || !sessionAlive) {
       if (isPublic || isOptional) return true;
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',

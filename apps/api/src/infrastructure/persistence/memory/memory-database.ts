@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   Bid,
   UserIdentity,
+  PasswordResetToken,
   BidSession,
   BusinessVerification,
   Dispute,
@@ -75,6 +76,8 @@ export class MemoryDatabase {
   readonly userIdentities = new Map<string, UserIdentity>();
   /** Ingresos sociales en vuelo, por `state`. Ver `LoginState`. */
   readonly loginStates = new Map<string, LoginState>();
+  /** Permisos de restablecimiento, por **hash** del token. Ver `PasswordResetToken`. */
+  readonly passwordResets = new Map<string, PasswordResetToken>();
   readonly businessVerifications = new Map<string, BusinessVerification>();
   readonly identityVerifications = new Map<string, IdentityVerification>();
   readonly disputes = new Map<string, Dispute>();
@@ -158,6 +161,7 @@ export class MemoryDatabase {
     // acompañada, que es exactamente el sintoma de un reset incompleto.
     this.userIdentities.clear();
     this.loginStates.clear();
+    this.passwordResets.clear();
     this.businessVerifications.clear();
     this.identityVerifications.clear();
     this.disputes.clear();

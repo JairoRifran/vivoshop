@@ -45,6 +45,15 @@ export const users = pgTable(
     phone: text('phone'),
     avatarUrl: text('avatar_url'),
     bio: text('bio'),
+    /**
+     * Cuando se cambio la contrasena por ultima vez. Null si nunca.
+     *
+     * Es la fecha de corte de las sesiones: un JWT emitido antes de esto esta
+     * muerto. Sin eso, cambiar la contrasena para echar a alguien que entro no
+     * lo echa --sigue adentro hasta que su token venza solo--. Ver
+     * `isSessionStillValid`.
+     */
+    passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }),
     country: text('country').notNull().default('UY'),
     /** Additive: a single account can hold both `buyer` and `seller`. */
     roles: jsonb('roles').$type<string[]>().notNull().default(['buyer']),
@@ -66,6 +75,23 @@ export const users = pgTable(
  * El unico por (usuario, proveedor) cierra la otra direccion: una cuenta no
  * puede tener dos Google distintos colgando.
  */
+/**
+ * Permisos para elegir una contrasena nueva.
+ *
+ * La clave primaria es el **hash** del token, no el token. El token viaja por
+ * email y vive en el buzon de la persona; aca solo queda su huella. Si la base
+ * se filtra, lo que el atacante encuentra no abre ninguna cuenta.
+ */
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+});
+
 export const userIdentities = pgTable(
   'user_identities',
   {
@@ -768,6 +794,7 @@ export const schema = {
   oauthStates,
   userIdentities,
   loginStates,
+  passwordResetTokens,
   businessVerifications,
   identityVerifications,
   disputes,

@@ -141,6 +141,18 @@ export default async function ProfilePage() {
           <Row label="País" value={user.country === 'UY' ? 'Uruguay' : user.country} />
           <Row label="Roles" value={user.roles.join(', ')} />
         </dl>
+        <Link
+          href="/perfil/seguridad"
+          className="flex items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-4 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-bold">Seguridad</p>
+            <p className="text-[13px] leading-snug text-subtle">
+              Tu contraseña y cómo entrás a la cuenta.
+            </p>
+          </div>
+          <ChevronRightIcon className="size-5 shrink-0 text-subtle" />
+        </Link>
         <SignOutButton />
       </section>
     </div>

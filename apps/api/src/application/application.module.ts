@@ -16,12 +16,14 @@ import { VerificationService } from './services/verification.service';
 import { SellerService } from './services/seller.service';
 import { StoreService } from './services/store.service';
 import { SocialAuthService } from './services/social-auth.service';
+import { PasswordFlowService } from './services/password.service';
 
 const SERVICES = [
   NotificationService,
   MediaService,
   AuthService,
   SocialAuthService,
+  PasswordFlowService,
   StoreService,
   CatalogService,
   LiveService,
