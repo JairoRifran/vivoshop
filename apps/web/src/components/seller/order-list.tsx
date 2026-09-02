@@ -64,7 +64,7 @@ export function SellerOrderList({ orders }: { orders: OrderDto[] }) {
               className={cn(
                 'inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-bold transition-colors',
                 filter === item.value
-                  ? 'bg-ink text-surface'
+                  ? 'bg-brand text-white'
                   : 'bg-surface text-ink-soft shadow-card',
               )}
             >

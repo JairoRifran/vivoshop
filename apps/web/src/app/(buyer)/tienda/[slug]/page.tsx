@@ -73,7 +73,14 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
           <ChevronLeftIcon className="size-5" />
         </Link>
 
-        <div className="-mt-10 flex items-end gap-3 px-4">
+        {/*
+          `relative` no es cosmético: sin él la portada tapaba el nombre.
+          La portada es un elemento posicionado y esta fila era estática, y el
+          orden de pintado de CSS dibuja lo posicionado por encima de lo que
+          está en flujo normal, aunque venga después en el documento. El avatar
+          perdía sus 40 px de arriba y el título, 15 de sus 28.
+        */}
+        <div className="relative -mt-10 flex items-end gap-3 px-4">
           <Avatar
             src={store.logoUrl}
             name={store.name}
@@ -121,7 +128,21 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
       ) : null}
 
       <section className="grid grid-cols-3 gap-2 px-4">
-        <Stat label="Reputación" value={`★ ${store.rating.toFixed(1)}`} note={`${store.reviewCount} reseñas`} />
+        {/*
+          Una tienda recién abierta mostraba "★ 0.0 · 0 reseñas", que se lee
+          como pésima calificación en vez de como ausencia de calificaciones.
+          Es el peor cartel posible en la pantalla donde alguien decide si
+          confía, y castiga justamente a quien todavía no vendió nada.
+        */}
+        {store.reviewCount > 0 ? (
+          <Stat
+            label="Reputación"
+            value={`★ ${store.rating.toFixed(1)}`}
+            note={`${store.reviewCount} ${store.reviewCount === 1 ? 'reseña' : 'reseñas'}`}
+          />
+        ) : (
+          <Stat label="Reputación" value="Nueva" note="Sin reseñas" />
+        )}
         <Stat label="Seguidores" value={store.followerCount.toLocaleString('es-UY')} />
         <Stat label="Ventas" value={store.salesCount.toLocaleString('es-UY')} />
       </section>

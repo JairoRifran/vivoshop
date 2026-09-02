@@ -1,4 +1,4 @@
-import { Avatar, Badge, Button, LiveDot } from '@vivo/ui';
+import { Avatar, Badge, Button, buttonClasses, LiveDot } from '@vivo/ui';
 import Link from 'next/link';
 import { CalendarIcon, ChevronRightIcon } from '@/components/icons';
 import { BecomeSellerForm } from '@/components/seller/become-seller-form';
@@ -114,7 +114,7 @@ export default async function SellerHomePage() {
             </div>
             <Link
               href={`/transmitir/${metrics.nextLive.id}`}
-              className="shrink-0 rounded-xl bg-ink px-3 py-2 text-[13px] font-bold text-surface"
+              className={buttonClasses({ size: 'sm', className: 'shrink-0 text-[13px]' })}
             >
               Abrir
             </Link>

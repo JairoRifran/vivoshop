@@ -14,15 +14,62 @@ const SIZES: Record<Size, string> = {
   lg: 'h-14 px-6 text-base gap-2.5 rounded-2xl',
 };
 
+const BASE = [
+  'relative inline-flex select-none items-center justify-center font-semibold',
+  'transition-[background-color,transform,opacity] duration-150 ease-out',
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+  'active:scale-[0.985] motion-reduce:active:scale-100 motion-reduce:transition-none',
+  'disabled:cursor-not-allowed disabled:active:scale-100',
+].join(' ');
+
 const VARIANTS: Record<Variant, string> = {
+  /*
+   * El primario es el verde de la marca y no el negro que era antes.
+   *
+   * Un primario negro es elegante y no es de nadie: deja el color de la marca
+   * fuera de lo único que la persona toca. Con el verde, cada acción que
+   * importa lleva la marca encima, que es lo que hace que un producto se
+   * reconozca sin leer el nombre.
+   *
+   * El negro no desapareció: sigue siendo el fondo de las tarjetas oscuras,
+   * donde hace de superficie y no de acción.
+   */
   primary:
-    'bg-ink text-surface hover:bg-ink/90 active:bg-ink/80 shadow-sm shadow-ink/10 disabled:bg-ink/40',
+    'bg-brand text-white hover:bg-brand-ink active:bg-brand-ink shadow-sm shadow-brand/20 disabled:bg-brand/40',
   secondary: 'bg-muted text-ink hover:bg-muted-strong active:bg-muted-strong/80',
   ghost: 'bg-transparent text-ink hover:bg-muted active:bg-muted-strong',
   outline: 'bg-transparent text-ink border border-line hover:bg-muted active:bg-muted-strong',
   live: 'bg-live text-white hover:bg-live/90 active:bg-live/80 shadow-lg shadow-live/25 disabled:bg-live/40',
   danger: 'bg-danger text-white hover:bg-danger/90 active:bg-danger/80',
 };
+
+/**
+ * Las clases de un botón, sin el botón.
+ *
+ * Existe porque media aplicación no usaba `<Button>`: había una decena de
+ * enlaces con `inline-flex h-13 ... bg-ink ... text-surface` escrito a mano,
+ * cada uno una copia del primario. Mientras el primario fue negro no se notó;
+ * al darle color a la marca, quedó a la vista que el estilo del botón vivía en
+ * diez archivos y no en uno.
+ *
+ * Un enlace no puede ser un `<button>` —navega, no ejecuta— así que no
+ * alcanzaba con reemplazarlos por el componente. Lo que se comparte es esto.
+ */
+export function buttonClasses(options?: {
+  variant?: Variant;
+  size?: Size;
+  block?: boolean;
+  className?: string;
+}): string {
+  const { variant = 'primary', size = 'lg', block = false, className } = options ?? {};
+  return cn(
+    BASE,
+    SIZES[size],
+    VARIANTS[variant],
+    block && 'w-full',
+    className,
+  );
+}
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -57,17 +104,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       // stable while a request is in flight.
       aria-busy={loading || undefined}
       disabled={disabled || loading}
-      className={cn(
-        'relative inline-flex select-none items-center justify-center font-semibold',
-        'transition-[background-color,transform,opacity] duration-150 ease-out',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        'active:scale-[0.985] motion-reduce:active:scale-100 motion-reduce:transition-none',
-        'disabled:cursor-not-allowed disabled:active:scale-100',
-        SIZES[size],
-        VARIANTS[variant],
-        block && 'w-full',
-        className,
-      )}
+      className={buttonClasses({ variant, size, block, className })}
       {...rest}
     >
       {loading ? <Spinner className="absolute" /> : null}
@@ -116,7 +153,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         'active:scale-95 motion-reduce:active:scale-100',
         size === 'lg' ? 'size-14' : 'size-11',
         variant === 'glass' && 'bg-black/45 text-white backdrop-blur-md hover:bg-black/60',
-        variant === 'solid' && 'bg-ink text-surface hover:bg-ink/90',
+        variant === 'solid' && 'bg-brand text-white hover:bg-brand-ink',
         variant === 'ghost' && 'text-ink hover:bg-muted',
         className,
       )}

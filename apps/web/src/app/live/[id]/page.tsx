@@ -29,7 +29,7 @@ export async function generateMetadata({
         type: 'video.other',
         title,
         description: session.title,
-        siteName: 'Vivo',
+        siteName: 'VivoShop',
         images,
       },
       twitter: {

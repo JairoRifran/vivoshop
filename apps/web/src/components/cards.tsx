@@ -235,7 +235,10 @@ export function StoreRow({ store }: { store: StoreSummaryDto }) {
         </p>
         <p className="truncate text-xs text-subtle">
           {STORE_CATEGORY_LABEL[store.category] ?? store.category}
-          {store.city ? ` · ${store.city}` : ''} · ★ {store.rating.toFixed(1)}
+          {store.city ? ` · ${store.city}` : ''}
+          {/* Sin reseñas no se muestra "★ 0.0", que se lee como la peor nota
+              posible en vez de como la ausencia de notas. Ver `docs/m09.md`. */}
+          {store.reviewCount > 0 ? ` · ★ ${store.rating.toFixed(1)}` : ' · Nueva'}
         </p>
       </div>
       {store.isFollowing ? (

@@ -1,5 +1,5 @@
 import type { OrderDto } from '@vivo/shared';
-import { Badge, EmptyState } from '@vivo/ui';
+import { Badge, buttonClasses, EmptyState } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -40,7 +40,7 @@ export default async function OrdersPage() {
             action={
               <Link
                 href="/en-vivo"
-                className="inline-flex h-11 items-center rounded-2xl bg-ink px-5 text-sm font-bold text-surface"
+                className={buttonClasses({ size: 'md', className: 'px-5 text-sm' })}
               >
                 Ver vivos
               </Link>

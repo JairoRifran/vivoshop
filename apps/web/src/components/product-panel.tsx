@@ -228,7 +228,7 @@ function VariantChip({
       className={cn(
         'inline-flex h-11 min-w-11 items-center justify-center rounded-2xl border px-4 text-sm font-bold transition-colors',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-        selected ? 'border-ink bg-ink text-surface' : 'border-line bg-surface text-ink hover:bg-muted',
+        selected ? 'border-brand bg-brand text-white' : 'border-line bg-surface text-ink hover:bg-muted',
         soldOut && 'cursor-not-allowed text-subtle line-through opacity-50',
       )}
     >

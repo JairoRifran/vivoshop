@@ -1,7 +1,7 @@
 'use client';
 
 import type { ProductSummaryDto } from '@vivo/shared';
-import { Badge, EmptyState, cn } from '@vivo/ui';
+import { Badge, buttonClasses, cn, EmptyState } from '@vivo/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
@@ -74,7 +74,7 @@ export function SellerProductList({ products }: { products: ProductSummaryDto[] 
             aria-pressed={filter === value}
             className={cn(
               'inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-bold transition-colors',
-              filter === value ? 'bg-ink text-surface' : 'bg-surface text-ink-soft shadow-card',
+              filter === value ? 'bg-brand text-white' : 'bg-surface text-ink-soft shadow-card',
             )}
           >
             {label}
@@ -96,7 +96,7 @@ export function SellerProductList({ products }: { products: ProductSummaryDto[] 
               !query ? (
                 <Link
                   href="/vender/productos/nuevo"
-                  className="inline-flex h-11 items-center rounded-2xl bg-ink px-5 text-sm font-bold text-surface"
+                  className={buttonClasses({ size: 'md', className: 'px-5 text-sm' })}
                 >
                   Nuevo producto
                 </Link>

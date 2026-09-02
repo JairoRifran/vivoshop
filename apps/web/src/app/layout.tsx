@@ -15,7 +15,7 @@ const manrope = Manrope({
   weight: ['400', '500', '600', '700', '800'],
 });
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'Vivo';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'VivoShop';
 
 export const metadata: Metadata = {
   title: {
@@ -27,8 +27,18 @@ export const metadata: Metadata = {
   applicationName: APP_NAME,
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: APP_NAME },
   formatDetection: { telephone: false },
+  /*
+   * Declarados acá y no por la convención de archivo de Next (`app/icon.svg`):
+   * si existen las dos, `metadata.icons` gana y la otra se ignora en silencio.
+   * Un solo lugar, aunque sea el más verboso.
+   *
+   * El SVG va primero porque escala solo; el PNG queda para quien no lo lea.
+   */
   icons: {
-    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    icon: [
+      { url: '/icons/icon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
   },
   openGraph: {
@@ -41,7 +51,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#14141a',
+  themeColor: '#2f6b4f',
   width: 'device-width',
   initialScale: 1,
   // Pinch zoom stays available: disabling it fails WCAG 1.4.4 and helps nobody.

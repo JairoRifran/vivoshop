@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'Vivo';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? 'VivoShop';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     orientation: 'portrait',
     background_color: '#faf9f7',
-    theme_color: '#14141a',
+    theme_color: '#2f6b4f',
     lang: 'es-UY',
     dir: 'ltr',
     categories: ['shopping', 'lifestyle'],

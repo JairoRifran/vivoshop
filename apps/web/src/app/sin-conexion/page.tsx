@@ -1,3 +1,4 @@
+import { buttonClasses } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -23,7 +24,7 @@ export default function OfflinePage() {
       </p>
       <Link
         href="/"
-        className="mt-2 inline-flex h-13 items-center rounded-2xl bg-ink px-6 text-[15px] font-bold text-surface"
+        className={buttonClasses({ className: 'mt-2 h-13 text-[15px]' })}
       >
         Reintentar
       </Link>

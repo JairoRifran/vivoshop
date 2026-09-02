@@ -1,3 +1,4 @@
+import { buttonClasses } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PlusIcon } from '@/components/icons';
@@ -20,7 +21,7 @@ export default async function SellerProductsPage() {
         </div>
         <Link
           href="/vender/productos/nuevo"
-          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl bg-ink px-4 text-sm font-bold text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          className={buttonClasses({ size: 'md', className: 'shrink-0 gap-1.5 text-sm' })}
         >
           <PlusIcon className="size-4" />
           Nuevo

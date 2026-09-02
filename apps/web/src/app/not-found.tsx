@@ -1,3 +1,4 @@
+import { buttonClasses } from '@vivo/ui';
 import Link from 'next/link';
 
 export default function NotFound() {
@@ -14,7 +15,7 @@ export default function NotFound() {
       <div className="flex flex-wrap justify-center gap-2 pt-2">
         <Link
           href="/"
-          className="inline-flex h-13 items-center rounded-2xl bg-ink px-6 text-[15px] font-bold text-surface"
+          className={buttonClasses({ className: 'h-13 text-[15px]' })}
         >
           Ir al inicio
         </Link>

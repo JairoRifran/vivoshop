@@ -68,7 +68,7 @@ export default async function ExplorePage({
                 'inline-flex h-10 shrink-0 items-center rounded-full px-4 text-sm font-bold transition-colors',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
                 active
-                  ? 'bg-ink text-surface'
+                  ? 'bg-brand text-white'
                   : 'bg-surface text-ink-soft shadow-card hover:bg-muted',
               ].join(' ')}
             >

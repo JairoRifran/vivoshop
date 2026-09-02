@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, TextInput } from '@vivo/ui';
+import { Button, buttonClasses, TextInput } from '@vivo/ui';
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { changePassword, requestPasswordReset, resetPassword } from '@/lib/actions/auth';
@@ -90,7 +90,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       {done ? (
         <Link
           href="/ingresar"
-          className="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-ink px-4 text-[15px] font-bold text-surface"
+          className={buttonClasses({ block: true, className: 'h-13 px-4 text-[15px]' })}
         >
           Ingresar
         </Link>

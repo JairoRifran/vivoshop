@@ -17,7 +17,9 @@ test('a buyer discovers a live, buys from it and finds the order', async ({ page
   await signIn(page, DEMO.buyer, '/');
 
   // --- Discovery -----------------------------------------------------------
-  await expect(page.getByRole('heading', { name: 'Vivo', exact: true })).toBeVisible();
+  // El nombre del producto, que hasta M09 decía "Vivo" mientras el dominio
+  // decía vivoshop.live. Esta aserción es la que detectó el cambio.
+  await expect(page.getByRole('heading', { name: 'VivoShop', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'En vivo ahora' })).toBeVisible();
   await expectNoHorizontalScroll(page);
 

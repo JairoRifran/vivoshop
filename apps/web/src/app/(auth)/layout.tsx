@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { VivoWordmark } from '@/components/brand';
 import { ChevronLeftIcon } from '@/components/icons';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
@@ -13,7 +14,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         >
           <ChevronLeftIcon className="size-5" />
         </Link>
-        <span className="text-[15px] font-extrabold tracking-tight">Vivo</span>
+        <VivoWordmark className="text-[15px]" markClassName="size-5" />
       </header>
       <main id="contenido" className="flex flex-1 flex-col justify-center pb-10">
         {children}

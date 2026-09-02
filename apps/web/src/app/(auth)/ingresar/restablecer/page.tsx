@@ -1,3 +1,4 @@
+import { buttonClasses } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ResetPasswordForm } from '@/components/password-forms';
@@ -23,7 +24,7 @@ export default async function ResetPasswordPage({
         </p>
         <Link
           href="/ingresar/olvide"
-          className="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-ink px-4 text-[15px] font-bold text-surface"
+          className={buttonClasses({ block: true, className: 'h-13 px-4 text-[15px]' })}
         >
           Pedir un enlace nuevo
         </Link>

@@ -1,4 +1,4 @@
-import { Avatar, Badge, EmptyState } from '@vivo/ui';
+import { Avatar, Badge, buttonClasses, EmptyState } from '@vivo/ui';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { StoreRow } from '@/components/cards';
@@ -24,7 +24,7 @@ export default async function ProfilePage() {
             <div className="flex gap-2">
               <Link
                 href="/ingresar?next=%2Fperfil"
-                className="inline-flex h-11 items-center rounded-2xl bg-ink px-5 text-sm font-bold text-surface"
+                className={buttonClasses({ size: 'md', className: 'px-5 text-sm' })}
               >
                 Ingresar
               </Link>

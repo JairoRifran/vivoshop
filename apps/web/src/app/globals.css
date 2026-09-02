@@ -25,6 +25,24 @@
   --color-muted-strong: #e8e6e1;
   --color-line: #e2e0da;
 
+  /*
+   * La marca.
+   *
+   * Verde, y verde por una razón concreta antes que estética: el rojo de
+   * abajo significa "está pasando ahora", y si la marca compartiera su
+   * familia de color, el punto rojo dejaría de ser inconfundible. Un
+   * terracota —la otra lectura de "tierra"— habría hecho exactamente eso.
+   *
+   * Es cálido y oscuro, no un verde de tecnología: convive con los neutros
+   * tibios del sistema en vez de gritar por encima de ellos.
+   *
+   * Contraste con blanco: 6,3:1. Pasa AA para texto normal, así que sirve
+   * igual para el fondo de un botón que para un enlace.
+   */
+  --color-brand: #2f6b4f;
+  --color-brand-ink: #1e4a36;
+  --color-brand-soft: #eaf1ec;
+
   /* The one saturated colour in the system. Reserved for "happening now". */
   --color-live: #ff2d55;
 

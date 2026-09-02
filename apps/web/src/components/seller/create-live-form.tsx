@@ -137,7 +137,7 @@ export function CreateLiveForm({
                     <span
                       className={cn(
                         'grid size-6 shrink-0 place-items-center rounded-full border-2',
-                        active ? 'border-ink bg-ink text-surface' : 'border-line',
+                        active ? 'border-brand bg-brand text-white' : 'border-line',
                       )}
                     >
                       {active ? <CheckIcon className="size-3.5" /> : null}

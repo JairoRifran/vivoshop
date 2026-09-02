@@ -1,5 +1,12 @@
 export { cn } from './cn';
-export { Button, IconButton, Spinner, type ButtonProps, type IconButtonProps } from './button';
+export {
+  Button,
+  buttonClasses,
+  IconButton,
+  Spinner,
+  type ButtonProps,
+  type IconButtonProps,
+} from './button';
 export {
   Field,
   SelectField,

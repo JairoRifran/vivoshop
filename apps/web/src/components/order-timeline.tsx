@@ -39,7 +39,7 @@ export function OrderTimeline({ order }: { order: OrderDto }) {
                 aria-hidden
                 className={cn(
                   'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
-                  done ? 'border-ink bg-ink text-surface' : 'border-line bg-surface',
+                  done ? 'border-brand bg-brand text-white' : 'border-line bg-surface',
                   current && 'ring-4 ring-ink/10',
                 )}
               >
@@ -52,7 +52,7 @@ export function OrderTimeline({ order }: { order: OrderDto }) {
               {!last ? (
                 <span
                   aria-hidden
-                  className={cn('w-0.5 flex-1', index < currentIndex ? 'bg-ink' : 'bg-line')}
+                  className={cn('w-0.5 flex-1', index < currentIndex ? 'bg-brand' : 'bg-line')}
                 />
               ) : null}
             </div>

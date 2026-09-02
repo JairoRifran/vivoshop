@@ -41,7 +41,7 @@ export function BottomNav({ liveCount = 0 }: { liveCount?: number }) {
                 className={cn(
                   'group flex min-h-14 flex-col items-center justify-center gap-1 pt-2 text-[11px] font-semibold',
                   'transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus',
-                  active ? 'text-ink' : 'text-subtle hover:text-ink-soft',
+                  active ? 'text-brand' : 'text-subtle hover:text-ink-soft',
                 )}
               >
                 <span className="relative">

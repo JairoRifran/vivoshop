@@ -1,3 +1,4 @@
+import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { DEMO, signIn } from './support';
 
@@ -28,7 +29,7 @@ const NUEVA = 'contrasena-nueva-larga';
  * es la única forma de que el token que usa el navegador sea el real y no uno
  * inventado por la prueba.
  */
-async function requestResetToken(request: import('@playwright/test').APIRequestContext, email: string) {
+async function requestResetToken(request: APIRequestContext, email: string) {
   const { apiUrl, resetToken } = await import('../playwright.config').then((m) => m.E2E);
 
   await request.post(`${apiUrl}/auth/password/forgot`, { data: { email } });

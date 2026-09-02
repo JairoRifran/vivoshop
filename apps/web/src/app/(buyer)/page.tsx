@@ -1,5 +1,6 @@
-import { Badge, EmptyState, LiveDot } from '@vivo/ui';
+import { Badge, buttonClasses, EmptyState, LiveDot } from '@vivo/ui';
 import Link from 'next/link';
+import { VivoWordmark } from '@/components/brand';
 import { LiveCard, LiveRowCard, ProductCard, StoreBubble } from '@/components/cards';
 import { BroadcastIcon, SearchIcon } from '@/components/icons';
 import { Rail, Section } from '@/components/section';
@@ -35,7 +36,9 @@ export default async function HomePage() {
       <header className="flex items-center justify-between gap-3 px-4 pt-2">
         <div>
           <p className="text-[13px] font-semibold text-subtle">Comercio en vivo · Uruguay</p>
-          <h1 className="text-[28px] font-extrabold leading-tight tracking-tight">Vivo</h1>
+          <h1 className="text-[28px] leading-tight">
+            <VivoWordmark markClassName="size-7" />
+          </h1>
         </div>
         <Link
           href="/explorar"
@@ -164,7 +167,7 @@ function SellerPitch() {
       </div>
       <Link
         href="/vender"
-        className="inline-flex h-11 shrink-0 items-center rounded-2xl bg-ink px-4 text-sm font-bold text-surface transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        className={buttonClasses({ size: 'md', className: 'shrink-0 text-sm' })}
       >
         Empezar
       </Link>
