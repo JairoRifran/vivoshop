@@ -202,7 +202,7 @@ const envSchema = z.object({
    * Los servicios de push lo exigen --un `mailto:` o una URL-- y lo usan para
    * avisarle a un humano antes de bloquear un remitente. No es decorativo.
    */
-  VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.uy'),
+  VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.live'),
 
   // --- Imagenes (M06) ---------------------------------------------------
   /**
@@ -259,7 +259,7 @@ const envSchema = z.object({
   /** Nunca sale del servidor. Nunca se loguea. */
   RESEND_API_KEY: z.string().optional(),
   /** El remitente. Su dominio tiene que estar verificado en Resend. */
-  EMAIL_FROM: z.string().default('VivoShop <hola@vivoshop.uy>'),
+  EMAIL_FROM: z.string().default('VivoShop <hola@vivoshop.live>'),
   /** Base publica de la web, para armar el enlace del correo. */
   WEB_PUBLIC_URL: z.string().optional(),
 });
