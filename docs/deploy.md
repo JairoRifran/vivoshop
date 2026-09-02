@@ -476,6 +476,17 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 | `MERCADOPAGO_ACCESS_TOKEN` | | ✅ | **sí** |
 | `MERCADOPAGO_WEBHOOK_SECRET` | | ✅ | **sí** |
 | `API_PUBLIC_URL` | | ✅ | no |
+| `WEB_PUBLIC_URL` | | ✅ | no |
+| `STORAGE_PROVIDER=supabase` | | ✅ | no |
+| `SUPABASE_URL` / `SUPABASE_STORAGE_BUCKET` | | ✅ | no |
+| `SUPABASE_SERVICE_KEY` | | ✅ | **sí** |
+| `OAUTH_PROVIDERS=google` | | ✅ | no |
+| `GOOGLE_CLIENT_ID` | | ✅ | no |
+| `GOOGLE_CLIENT_SECRET` | | ✅ | **sí** |
+| `EMAIL_PROVIDER=resend` / `EMAIL_FROM` | | ✅ | no |
+| `RESEND_API_KEY` | | ✅ | **sí** |
+| `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` | | ✅ | no |
+| `VAPID_PRIVATE_KEY` | | ✅ | **sí** |
 
 ---
 
@@ -494,10 +505,16 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 | Migraciones aplicadas en el deploy | **VERIFICADO** — el `preDeployCommand` aplicó `0006_m04_bid_mode` solo. La prueba es que `/bids` consulta `bid_sessions` y devuelve 200: sin la migración daría 500. En Supabase quedan 7 migraciones registradas. |
 | Modo Puja en producción | **PARCIAL** — esquema, versión desplegada (`/health` devuelve el commit) y rutas verificados. Una puja real de punta a punta **NO** se ejecutó: exige poner la tienda al aire, y eso es tuyo. |
 | Cobros con Mercado Pago en producción | **NO VERIFICADO** — el despliegue sigue con `PAYMENT_PROVIDER=fake`. No se ejecutó ningún cobro real ni de prueba contra Mercado Pago. Ver `docs/m03.md` §17. |
+| Migraciones `0009`, `0010` y `0011` | **VERIFICADO** — `Migraciones aplicadas.` en los logs del despliegue `f48eafc`, antes del arranque. `0010` además se ejercitó: `/auth/google/start` escribe en `login_states` y devolvió 302. |
+| Ingreso con Google en producción | **PARCIAL** — `/auth/providers` devuelve `["google"]` y `/auth/google/start` redirige a Google con la URI registrada. El viaje completo con una cuenta real no se hizo: exige la contraseña del dueño. |
+| Recuperación de contraseña en producción | **PARCIAL** — `/auth/password/status` devuelve `canRecover: true` y las dos pantallas responden 200. No se pidió un enlace real. |
+| Almacenamiento en Supabase | **PARCIAL** — bucket `vivoshop-media` creado y la API arranca con `STORAGE_PROVIDER=supabase`. Ninguna foto se subió todavía. |
+| `vivoshop.live` sirviendo la aplicación | **VERIFICADO** — 200 en `/`, `/ingresar`, `/crear-cuenta`, `/ingresar/olvide` y `/ingresar/restablecer`, contra datos reales de la base. |
+| El guardia de `env.ts` en producción | **VERIFICADO por accidente** — el despliegue del mismo commit **sin** las variables nuevas murió en el `preDeployCommand`, que es exactamente lo prometido. |
 
-Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
-pero solo tres de esas filas se ejecutaron. Las otras se confirman en el primer
-despliegue.
+Lo de arriba es honesto a propósito. Las filas **PARCIAL** lo son por la misma
+razón en los tres casos: lo que falta exige una cuenta y una contraseña de una
+persona real, y eso no lo hace un agente.
 
 ---
 
@@ -538,14 +555,18 @@ DMARC arranca en `p=none`, que monitorea sin rechazar. Endurecerlo antes de
 saber que todo lo que sale del dominio está firmado es como uno se tira sus
 propios correos a spam.
 
-### Lo que falta cuando la API vuelva
+### La API, apuntada al dominio nuevo
 
-El dominio de la web cambió, así que en **Railway**:
+**Hecho.** En Railway:
 
-- `WEB_ORIGIN` tiene que incluir `https://vivoshop.live`, o el navegador no va a
-  poder llamar a la API desde el dominio nuevo —lo corta CORS—.
+- `WEB_ORIGIN=https://vivoshop.live,https://vivoshop-web.vercel.app`. El orden
+  no es cosmético: el código toma `corsOrigins[0]` como base para armar las URLs
+  de vuelta, así que el apex va **primero** y el dominio de Vercel queda como
+  respaldo.
 - `WEB_PUBLIC_URL=https://vivoshop.live`, que es de dónde sale el enlace del
-  correo de recuperación.
+  correo de recuperación. Nunca del encabezado `Host`: si saliera de ahí,
+  cualquiera podría pedir un restablecimiento y hacer que el enlace apunte a su
+  propio dominio.
 
 Y si algún día la API se muda a `api.vivoshop.live`, hay que actualizar además
 la URI de redirección en la consola de Google y `API_PUBLIC_URL`. Hoy la API
