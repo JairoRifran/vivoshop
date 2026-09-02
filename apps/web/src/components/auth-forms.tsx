@@ -162,6 +162,24 @@ export function SignUpForm({ next }: { next: string }) {
         Crear cuenta
       </Button>
 
+      {/*
+        La aceptación va acá, junto al botón que la produce, y no escondida en
+        una casilla aparte. Sin casilla a propósito: un consentimiento que se
+        obtiene haciendo tildar algo que nadie lee no vale más que este texto, y
+        este además no le agrega un paso a nadie.
+      */}
+      <p className="text-center text-[13px] leading-relaxed text-subtle">
+        Al crear tu cuenta aceptás las{' '}
+        <Link href="/terminos" className="font-semibold text-ink underline underline-offset-2">
+          Condiciones del Servicio
+        </Link>{' '}
+        y la{' '}
+        <Link href="/privacidad" className="font-semibold text-ink underline underline-offset-2">
+          Política de Privacidad
+        </Link>
+        .
+      </p>
+
       <p className="text-center text-[15px] text-subtle">
         ¿Ya tenés cuenta?{' '}
         <Link

@@ -155,6 +155,24 @@ export default async function ProfilePage() {
         </Link>
         <SignOutButton />
       </section>
+
+      {/*
+        Los documentos legales, alcanzables desde adentro de la aplicación.
+        Google exige que sean públicos y los enlaza desde su pantalla de
+        consentimiento, pero quien ya tiene cuenta también tiene que poder
+        llegar sin salir a buscar la URL.
+      */}
+      <footer className="px-4 pb-4">
+        <nav className="flex items-center justify-center gap-4 text-[13px] text-subtle">
+          <Link href="/privacidad" className="hover:text-ink">
+            Privacidad
+          </Link>
+          <span aria-hidden>·</span>
+          <Link href="/terminos" className="hover:text-ink">
+            Términos
+          </Link>
+        </nav>
+      </footer>
     </div>
   );
 }
