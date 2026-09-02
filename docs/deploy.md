@@ -498,3 +498,55 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 Lo de arriba es honesto a propósito: la configuración está escrita y razonada,
 pero solo tres de esas filas se ejecutaron. Las otras se confirman en el primer
 despliegue.
+
+---
+
+## El dominio propio: vivoshop.live
+
+Comprado en Namecheap. Sirve dos cosas distintas y conviene no confundirlas:
+**la web** y **el correo**.
+
+### La web, en Vercel
+
+| Registro | Host | Valor |
+| --- | --- | --- |
+| A | `@` | `216.198.79.1` |
+| CNAME | `www` | `5f9ee9361a02acb8.vercel-dns-017.com.` |
+
+En el proyecto `vivoshop-web`: `vivoshop.live` apunta a Production, y
+`www.vivoshop.live` **redirige** (307) al dominio sin `www`.
+
+Se eligió el apex como canónico y no `www`. Vercel recomienda lo contrario por
+razones técnicas de CDN, pero para un producto de consumo la dirección corta es
+la que la gente escribe y comparte, y el redirect cubre a quien escriba `www`.
+
+### El correo, en Resend
+
+| Registro | Host | Valor |
+| --- | --- | --- |
+| TXT | `resend._domainkey` | la clave pública DKIM |
+| CNAME | `rsend` | `rsend-sae1.forge.rmta.net.` |
+| CNAME | `send` | `send.forge.rmta.net.` |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` |
+
+Dominio raíz y no un subdominio de envío: el remitente queda
+`hola@vivoshop.live`, y en un correo de recuperación de contraseña —el momento
+en que alguien mira de quién viene— la dirección limpia vale más que el
+aislamiento de reputación que daría `mail.vivoshop.live`.
+
+DMARC arranca en `p=none`, que monitorea sin rechazar. Endurecerlo antes de
+saber que todo lo que sale del dominio está firmado es como uno se tira sus
+propios correos a spam.
+
+### Lo que falta cuando la API vuelva
+
+El dominio de la web cambió, así que en **Railway**:
+
+- `WEB_ORIGIN` tiene que incluir `https://vivoshop.live`, o el navegador no va a
+  poder llamar a la API desde el dominio nuevo —lo corta CORS—.
+- `WEB_PUBLIC_URL=https://vivoshop.live`, que es de dónde sale el enlace del
+  correo de recuperación.
+
+Y si algún día la API se muda a `api.vivoshop.live`, hay que actualizar además
+la URI de redirección en la consola de Google y `API_PUBLIC_URL`. Hoy la API
+sigue en `vivoshop-production.up.railway.app`.

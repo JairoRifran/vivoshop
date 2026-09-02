@@ -21,6 +21,9 @@ import {
   PRODUCT_REPOSITORY,
   STORE_REPOSITORY,
   USER_REPOSITORY,
+  USER_IDENTITY_REPOSITORY,
+  LOGIN_STATE_REPOSITORY,
+  PASSWORD_RESET_REPOSITORY,
 } from '../../application/ports/tokens';
 import { BID_REPOSITORY, BID_TRANSACTION_RUNNER } from '../../application/ports/bids';
 import {
@@ -63,6 +66,9 @@ import {
   DrizzleProductRepository,
   DrizzleStoreRepository,
   DrizzleUserRepository,
+  DrizzleUserIdentityRepository,
+  DrizzleLoginStateRepository,
+  DrizzlePasswordResetRepository,
 } from './drizzle/drizzle.repositories';
 import { AesGcmSecretBox, SECRET_BOX, loadEncryptionKeys } from '../crypto/secret-box';
 import { MemoryDatabase } from './memory/memory-database';
@@ -78,10 +84,16 @@ import {
   MemoryProductRepository,
   MemoryStoreRepository,
   MemoryUserRepository,
+  MemoryUserIdentityRepository,
+  MemoryLoginStateRepository,
+  MemoryPasswordResetRepository,
 } from './memory/memory.repositories';
 
 const REPOSITORY_TOKENS = [
   USER_REPOSITORY,
+  USER_IDENTITY_REPOSITORY,
+  LOGIN_STATE_REPOSITORY,
+  PASSWORD_RESET_REPOSITORY,
   PUSH_SUBSCRIPTION_REPOSITORY,
   PUSH_DELIVERY_REPOSITORY,
   STORE_REPOSITORY,
@@ -115,6 +127,9 @@ const POOL = Symbol('PgPool');
   providers: [
     MemoryDatabase,
     { provide: USER_REPOSITORY, useClass: MemoryUserRepository },
+    { provide: USER_IDENTITY_REPOSITORY, useClass: MemoryUserIdentityRepository },
+    { provide: LOGIN_STATE_REPOSITORY, useClass: MemoryLoginStateRepository },
+    { provide: PASSWORD_RESET_REPOSITORY, useClass: MemoryPasswordResetRepository },
     { provide: STORE_REPOSITORY, useClass: MemoryStoreRepository },
     { provide: PRODUCT_REPOSITORY, useClass: MemoryProductRepository },
     { provide: LIVE_REPOSITORY, useClass: MemoryLiveRepository },
@@ -201,6 +216,9 @@ export class MemoryPersistenceModule implements OnModuleInit {
         ),
     },
     { provide: USER_REPOSITORY, useClass: DrizzleUserRepository },
+    { provide: USER_IDENTITY_REPOSITORY, useClass: DrizzleUserIdentityRepository },
+    { provide: LOGIN_STATE_REPOSITORY, useClass: DrizzleLoginStateRepository },
+    { provide: PASSWORD_RESET_REPOSITORY, useClass: DrizzlePasswordResetRepository },
     { provide: STORE_REPOSITORY, useClass: DrizzleStoreRepository },
     { provide: PRODUCT_REPOSITORY, useClass: DrizzleProductRepository },
     { provide: LIVE_REPOSITORY, useClass: DrizzleLiveRepository },

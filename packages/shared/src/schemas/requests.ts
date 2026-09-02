@@ -36,12 +36,41 @@ export const loginRequestSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
+/**
+ * La imagen se manda por **clave**, no por URL.
+ *
+ * Antes esto aceptaba `avatarUrl: string`, y eso significaba que cualquiera
+ * podía poner ahí la URL que quisiera: la foto de otra persona, un pixel de
+ * rastreo alojado en su servidor, o una imagen que cambiara de contenido
+ * después de que la moderemos. Una clave solo puede referirse a algo que se
+ * subió a nuestro almacenamiento, y el servidor comprueba además que el
+ * segmento del dueño sea quien está en sesión. Ver `assertOwnMediaKey`.
+ *
+ * `null` borra la imagen; omitir el campo la deja como está.
+ */
 export const updateProfileRequestSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   phone: phoneSchema.nullable().optional(),
-  avatarUrl: z.string().max(500).nullable().optional(),
+  avatarKey: z.string().max(300).nullable().optional(),
+  bio: z.string().trim().max(280).nullable().optional(),
 });
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
+
+export const forgotPasswordRequestSchema = z.object({ email: emailSchema });
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+export const resetPasswordRequestSchema = z.object({
+  token: z.string().min(1).max(512),
+  password: passwordSchema,
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
+export const changePasswordRequestSchema = z.object({
+  /** Ausente cuando la cuenta todavia no tiene contrasena. Ver `assertCanChangePassword`. */
+  currentPassword: z.string().max(200).optional(),
+  password: passwordSchema,
+});
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 
 // --- Seller onboarding ---------------------------------------------------------
 
@@ -60,8 +89,10 @@ export const updateStoreRequestSchema = z.object({
   description: z.string().trim().max(400).optional(),
   category: z.enum(STORE_CATEGORIES).optional(),
   city: z.string().trim().max(60).nullable().optional(),
-  logoUrl: z.string().max(500).nullable().optional(),
-  coverUrl: z.string().max(500).nullable().optional(),
+  /** Claves de nuestro almacenamiento, no URLs. Ver `updateProfileRequestSchema`. */
+  logoKey: z.string().max(300).nullable().optional(),
+  coverKey: z.string().max(300).nullable().optional(),
+  whatsapp: z.string().trim().max(30).nullable().optional(),
   deliveryMethodIds: z.array(z.string()).min(1).optional(),
   freeShippingThresholdMinor: minorAmountSchema.nullable().optional(),
   pickupInstructions: z.string().max(240).nullable().optional(),

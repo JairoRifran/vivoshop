@@ -202,13 +202,80 @@ const envSchema = z.object({
    * Los servicios de push lo exigen --un `mailto:` o una URL-- y lo usan para
    * avisarle a un humano antes de bloquear un remitente. No es decorativo.
    */
-  VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.uy'),
+  VAPID_SUBJECT: z.string().default('mailto:hola@vivoshop.live'),
+
+  // --- Imagenes (M06) ---------------------------------------------------
+  /**
+   * `local` guarda los bytes en memoria y muere con el proceso, que es por que
+   * es el default: un clon del repositorio arranca sin contratar un bucket.
+   * `supabase` es el camino real.
+   */
+  STORAGE_PROVIDER: z.enum(['local', 'supabase']).default('local'),
+  /** Base del proyecto de Supabase, p. ej. `https://abc.supabase.co`. */
+  SUPABASE_URL: z.string().optional(),
+  /**
+   * Clave de servicio. Firma las subidas y **nunca** sale del servidor.
+   *
+   * Es la credencial mas poderosa del proyecto de Supabase: salta las politicas
+   * de fila. No va al navegador, no se loguea, no aparece en `/health`.
+   */
+  SUPABASE_SERVICE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().default('vivoshop-media'),
+
+  // --- Ingresar con Google / Meta (M07) ---------------------------------
+  /**
+   * Que proveedores de identidad se ofrecen, separados por coma.
+   *
+   * `fake` es el default por lo mismo que `mock` y `fake` en los otros ejes: un
+   * clon del repositorio tiene que ejercitar el recorrido completo sin que
+   * nadie cree credenciales en la consola de Google. Vacio apaga el ingreso
+   * social por completo y la pantalla no dibuja ningun boton.
+   *
+   * En produccion `fake` esta prohibido --lo corta el guardia de abajo--:
+   * seria un boton que le da la cuenta de `demo@vivo.uy` a cualquiera.
+   */
+  OAUTH_PROVIDERS: z.string().default('fake'),
+  /** Identificador publico del cliente OAuth. Se puede loguear. */
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  /** Nunca sale del servidor. Nunca se loguea. Nunca va a un navegador. */
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+
+  // --- Correo (M08) ------------------------------------------------------
+  /**
+   * Como se manda el correo. Hoy solo lo usa el restablecimiento de contrasena.
+   *
+   * `log` lo escribe en la consola y es el default: un clon del repositorio
+   * recorre el flujo entero sin contratar nada. En produccion esta **prohibido**
+   * --la pantalla diria "te mandamos un email" y nadie recibiria nada, dejando
+   * a alguien esperando algo que nunca llega--.
+   *
+   * `none` apaga la recuperacion por completo, y es una produccion valida: la
+   * pantalla no ofrece "olvide mi contrasena" y nadie queda esperando. Es mejor
+   * no tener la funcion que fingirla.
+   */
+  EMAIL_PROVIDER: z.enum(['log', 'none', 'resend']).default('log'),
+  /** Nunca sale del servidor. Nunca se loguea. */
+  RESEND_API_KEY: z.string().optional(),
+  /** El remitente. Su dominio tiene que estar verificado en Resend. */
+  EMAIL_FROM: z.string().default('VivoShop <hola@vivoshop.live>'),
+  /** Base publica de la web, para armar el enlace del correo. */
+  WEB_PUBLIC_URL: z.string().optional(),
 });
 
 export type RawEnv = z.infer<typeof envSchema>;
 
 export interface AppEnv extends RawEnv {
   readonly corsOrigins: string[];
+  /**
+   * `OAUTH_PROVIDERS` ya partido y validado.
+   *
+   * Vive acá y no en cada consumidor para que la lista se valide una sola vez,
+   * al arrancar: un nombre mal escrito tiene que frenar el despliegue, no
+   * aparecer como un botón que no hace nada.
+   */
+  readonly identityProviders: readonly string[];
   readonly isProduction: boolean;
   readonly isTest: boolean;
   /**
@@ -282,6 +349,63 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       throw new Error(`STREAMING_PROVIDER=livekit requires ${missing.join(', ')}`);
     }
   }
+  if (env.STORAGE_PROVIDER === 'supabase') {
+    const missing = (['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'] as const).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      throw new Error(`STORAGE_PROVIDER=supabase requires ${missing.join(', ')}`);
+    }
+  }
+  // Los bytes en memoria mueren con el proceso: en produccion eso significa que
+  // cada deploy borra las fotos de perfil de todo el mundo.
+  if (env.NODE_ENV === 'production' && env.STORAGE_PROVIDER === 'local') {
+    throw new Error(
+      'STORAGE_PROVIDER=local guarda las imagenes en memoria y las pierde en cada deploy. ' +
+        'Configurá STORAGE_PROVIDER=supabase con SUPABASE_URL y SUPABASE_SERVICE_KEY.',
+    );
+  }
+  const identityProviders = env.OAUTH_PROVIDERS.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  for (const name of identityProviders) {
+    if (!['fake', 'google', 'meta'].includes(name)) {
+      throw new Error(`OAUTH_PROVIDERS no conoce "${name}". Valores: fake, google, meta.`);
+    }
+  }
+  if (identityProviders.includes('google')) {
+    const missing = (['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] as const).filter(
+      (key) => !env[key],
+    );
+    if (missing.length > 0) {
+      throw new Error(`OAUTH_PROVIDERS con google requiere ${missing.join(', ')}`);
+    }
+  }
+  if (identityProviders.includes('meta')) {
+    const missing = (['META_APP_ID', 'META_APP_SECRET'] as const).filter((key) => !env[key]);
+    if (missing.length > 0) {
+      throw new Error(`OAUTH_PROVIDERS con meta requiere ${missing.join(', ')}`);
+    }
+  }
+  // El proveedor falso le entrega la cuenta de demo a cualquiera que toque el
+  // boton. En una maquina de desarrollo es comodo; en produccion es la puerta
+  // abierta, y por eso el proceso se niega a arrancar asi.
+  if (env.NODE_ENV === 'production' && identityProviders.includes('fake')) {
+    throw new Error(
+      'OAUTH_PROVIDERS=fake entrega una cuenta de demostración a cualquiera. ' +
+        'En producción usá google (o dejá OAUTH_PROVIDERS vacío para apagar el ingreso social).',
+    );
+  }
+  if (env.EMAIL_PROVIDER === 'resend' && !env.RESEND_API_KEY) {
+    throw new Error('EMAIL_PROVIDER=resend requiere RESEND_API_KEY');
+  }
+  // `log` en produccion es peor que no tener la funcion: la pantalla promete un
+  // correo que nunca sale, y quien perdio su contrasena se queda esperando sin
+  // ver un solo error. Si todavia no hay proveedor, `none` la apaga de frente.
+  if (env.NODE_ENV === 'production' && env.EMAIL_PROVIDER === 'log') {
+    throw new Error(
+      'EMAIL_PROVIDER=log escribe los correos en la consola y no envía nada. ' +
+        'En producción usá resend, o none para apagar la recuperación de contraseña.',
+    );
+  }
   if (env.NOTIFICATION_PROVIDER === 'webpush') {
     const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter(
       (key) => !env[key],
@@ -335,6 +459,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       .filter(Boolean),
     isProduction,
     isTest: env.NODE_ENV === 'test',
+    identityProviders,
     // Se lee de `normalized` y no del esquema a propósito: así el SHA completo
     // no forma parte de `AppEnv` y no hay manera de exponerlo sin querer.
     version: deployedVersion(normalized, isProduction),

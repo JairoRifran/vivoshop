@@ -21,6 +21,18 @@ const PRODUCTION: NodeJS.ProcessEnv = {
   // Obligatoria en producción desde M04.1: sin ella los tokens de los
   // vendedores quedarían en texto plano y el proceso no arranca.
   ENCRYPTION_KEY: Buffer.alloc(32, 'k').toString('base64'),
+  // Obligatorio desde M06: `local` guarda las imágenes en memoria, así que en
+  // producción cada deploy borraría las fotos de perfil de todo el mundo.
+  STORAGE_PROVIDER: 'supabase',
+  SUPABASE_URL: 'https://proyecto.supabase.co',
+  SUPABASE_SERVICE_KEY: 'clave-de-servicio',
+  // Vacío desde M07: el ingreso social apagado es una producción válida, y el
+  // proveedor simulado está prohibido allá. Ver el bloque de abajo.
+  OAUTH_PROVIDERS: '',
+  // Obligatorio desde M08: `log` escribiría los correos en la consola y la
+  // pantalla prometería un email que nunca sale. `none` apaga la recuperación
+  // de frente, que es una producción válida.
+  EMAIL_PROVIDER: 'none',
 };
 
 const SHA = 'cd206a699103e727f7929f0279f09e8b96cf6e58';
@@ -130,5 +142,96 @@ describe('la clave de cifrado', () => {
     expect(() => loadEnv({ ...PRODUCTION, ENCRYPTION_KEY: 'demasiado-corta' })).toThrow(
       /32 bytes/,
     );
+  });
+});
+
+describe('dónde se guardan las imágenes', () => {
+  it('en desarrollo alcanza con el driver local', () => {
+    expect(loadEnv(BASE).STORAGE_PROVIDER).toBe('local');
+  });
+
+  it('supabase sin credenciales no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, SUPABASE_SERVICE_KEY: undefined })).toThrow(
+      /SUPABASE_SERVICE_KEY/,
+    );
+  });
+
+  it('producción con el driver local no arranca, y dice por qué', () => {
+    // Los bytes en memoria mueren con el proceso. Dejarlo pasar sería que las
+    // fotos de perfil desaparecieran en el siguiente deploy, en silencio.
+    expect(() => loadEnv({ ...PRODUCTION, STORAGE_PROVIDER: 'local' })).toThrow(/en memoria/);
+  });
+});
+
+describe('con qué se puede ingresar', () => {
+  it('en desarrollo alcanza con el proveedor simulado', () => {
+    // Un clon del repositorio ejercita el recorrido completo sin que nadie cree
+    // credenciales en la consola de Google.
+    expect(loadEnv(BASE).identityProviders).toEqual(['fake']);
+  });
+
+  it('vacío apaga el ingreso social', () => {
+    // Una producción sin Google es válida: la pantalla no dibuja el botón.
+    expect(loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: '' }).identityProviders).toEqual([]);
+  });
+
+  it('producción con el proveedor simulado no arranca', () => {
+    // Sería un botón que le entrega la cuenta de demostración a cualquiera.
+    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'fake' })).toThrow(
+      /cuenta de demostración/,
+    );
+  });
+
+  it('google sin credenciales no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'google' })).toThrow(
+      /GOOGLE_CLIENT_ID/,
+    );
+  });
+
+  it('google con credenciales arranca', () => {
+    const env = loadEnv({
+      ...PRODUCTION,
+      OAUTH_PROVIDERS: 'google',
+      GOOGLE_CLIENT_ID: 'id-publico',
+      GOOGLE_CLIENT_SECRET: 'secreto',
+    });
+
+    expect(env.identityProviders).toEqual(['google']);
+  });
+
+  it('un nombre mal escrito frena el despliegue', () => {
+    // Tiene que fallar al arrancar y no aparecer como un botón que no hace nada.
+    expect(() => loadEnv({ ...BASE, OAUTH_PROVIDERS: 'gogle' })).toThrow(/gogle/);
+  });
+});
+
+describe('cómo se manda el correo', () => {
+  it('en desarrollo va al log', () => {
+    expect(loadEnv(BASE).EMAIL_PROVIDER).toBe('log');
+  });
+
+  it('producción con el log no arranca', () => {
+    // Sería peor que no tener la función: la pantalla dice "te mandamos un
+    // email" y quien perdió su contraseña se queda esperando sin ver un error.
+    expect(() => loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'log' })).toThrow(/no envía nada/);
+  });
+
+  it('producción sin recuperación es válida', () => {
+    // Mejor apagarla de frente que fingirla.
+    expect(loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'none' }).EMAIL_PROVIDER).toBe('none');
+  });
+
+  it('resend sin clave no arranca', () => {
+    expect(() => loadEnv({ ...PRODUCTION, EMAIL_PROVIDER: 'resend' })).toThrow(/RESEND_API_KEY/);
+  });
+
+  it('resend con clave arranca', () => {
+    const env = loadEnv({
+      ...PRODUCTION,
+      EMAIL_PROVIDER: 'resend',
+      RESEND_API_KEY: 'clave-de-resend',
+    });
+
+    expect(env.EMAIL_PROVIDER).toBe('resend');
   });
 });

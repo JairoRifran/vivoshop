@@ -72,6 +72,8 @@ export function toUser(row: UserRow): User {
     email: row.email,
     phone: row.phone,
     avatarUrl: row.avatarUrl,
+    bio: row.bio,
+    passwordChangedAt: row.passwordChangedAt,
     country: row.country as CountryCode,
     roles: row.roles as UserRole[],
     status: row.status as UserStatus,
@@ -80,7 +82,7 @@ export function toUser(row: UserRow): User {
   };
 }
 
-export function fromUser(user: User, passwordHash: string) {
+export function fromUser(user: User, passwordHash: string | null) {
   return {
     id: String(user.id),
     name: user.name,
@@ -88,6 +90,8 @@ export function fromUser(user: User, passwordHash: string) {
     passwordHash,
     phone: user.phone,
     avatarUrl: user.avatarUrl,
+    bio: user.bio,
+    passwordChangedAt: user.passwordChangedAt,
     country: user.country,
     roles: [...user.roles],
     status: user.status,

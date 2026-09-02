@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { isWatchable } from '@vivo/domain';
 import type {
+  AuthProvider,
+  UserIdentity,
+  PasswordResetToken,
   Follow,
   LiveMessage,
   LiveSession,
@@ -32,6 +35,10 @@ import type {
   StoredAnalyticsEvent,
   StoredCredentials,
   UserRepository,
+  UserIdentityRepository,
+  LoginStateRepository,
+  LoginState,
+  PasswordResetRepository,
   PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
@@ -74,15 +81,28 @@ export class MemoryUserRepository implements UserRepository {
     return passwordHash ? { userId: user.id, passwordHash } : null;
   }
 
-  async create(user: User, passwordHash: string): Promise<User> {
+  async create(user: User, passwordHash: string | null): Promise<User> {
     this.db.users.set(String(user.id), user);
-    this.db.credentials.set(String(user.id), passwordHash);
+    // Null no escribe nada: sin fila de credenciales,
+    // `findCredentialsByEmail` devuelve null y el login por contrasena falla
+    // como corresponde para una cuenta que solo se abre con un proveedor.
+    if (passwordHash !== null) this.db.credentials.set(String(user.id), passwordHash);
     return user;
   }
 
   async update(user: User): Promise<User> {
     this.db.users.set(String(user.id), user);
     return user;
+  }
+
+  async setPassword(id: UserId, passwordHash: string, changedAt: Date): Promise<void> {
+    const user = this.db.users.get(String(id));
+    if (!user) return;
+
+    this.db.credentials.set(String(id), passwordHash);
+    // Los dos juntos: separarlos dejaria una ventana con la contrasena nueva y
+    // las sesiones viejas todavia validas.
+    this.db.users.set(String(id), { ...user, passwordChangedAt: changedAt, updatedAt: changedAt });
   }
 }
 
@@ -433,5 +453,93 @@ export class MemoryPushDeliveryRepository implements PushDeliveryRepository {
       if (entry.liveSessionId === liveSessionId && entry.type === type) total += 1;
     }
     return total;
+  }
+}
+
+/**
+ * Las formas de entrar, en memoria.
+ *
+ * La clave del mapa es `proveedor::idDelProveedor`, que es la misma clave
+ * primaria que en Postgres. Que las dos coincidan es lo que hace que las
+ * pruebas de contrato valgan: si el driver de memoria dedujera la identidad de
+ * otra manera, pasarían acá y fallarían en producción.
+ */
+@Injectable()
+export class MemoryUserIdentityRepository implements UserIdentityRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async find(provider: AuthProvider, providerUserId: string): Promise<UserIdentity | null> {
+    return this.db.userIdentities.get(`${provider}::${providerUserId}`) ?? null;
+  }
+
+  async listForUser(userId: UserId): Promise<UserIdentity[]> {
+    return [...this.db.userIdentities.values()].filter(
+      (identity) => String(identity.userId) === String(userId),
+    );
+  }
+
+  async link(identity: UserIdentity): Promise<UserIdentity> {
+    this.db.userIdentities.set(`${identity.provider}::${identity.providerUserId}`, identity);
+    return identity;
+  }
+}
+
+/**
+ * Los ingresos en vuelo, en memoria.
+ *
+ * `consume` es de un solo uso y por eso lee y escribe sin ceder el control en
+ * el medio: dos callbacks con el mismo `state` no pueden pasar los dos.
+ */
+@Injectable()
+export class MemoryLoginStateRepository implements LoginStateRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async create(state: LoginState): Promise<void> {
+    this.db.loginStates.set(state.state, state);
+  }
+
+  async consume(state: string, now: Date): Promise<LoginState | null> {
+    const pending = this.db.loginStates.get(state);
+    if (!pending) return null;
+    if (pending.consumedAt !== null) return null;
+    if (pending.expiresAt.getTime() <= now.getTime()) return null;
+
+    this.db.loginStates.set(state, { ...pending, consumedAt: now });
+    return pending;
+  }
+}
+
+
+/**
+ * Permisos de restablecimiento, en memoria.
+ *
+ * La clave del mapa es el hash del token, igual que la clave primaria en
+ * Postgres. Que coincidan es lo que hace que las pruebas contra este driver
+ * digan algo sobre el otro.
+ */
+@Injectable()
+export class MemoryPasswordResetRepository implements PasswordResetRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async create(token: PasswordResetToken): Promise<void> {
+    this.db.passwordResets.set(token.tokenHash, token);
+  }
+
+  async consume(tokenHash: string, now: Date): Promise<PasswordResetToken | null> {
+    const pending = this.db.passwordResets.get(tokenHash);
+    if (!pending) return null;
+    if (pending.consumedAt !== null) return null;
+    if (pending.expiresAt.getTime() <= now.getTime()) return null;
+
+    this.db.passwordResets.set(tokenHash, { ...pending, consumedAt: now });
+    return pending;
+  }
+
+  async consumeAllFor(userId: UserId, now: Date): Promise<void> {
+    for (const [hash, token] of this.db.passwordResets) {
+      if (String(token.userId) === String(userId) && token.consumedAt === null) {
+        this.db.passwordResets.set(hash, { ...token, consumedAt: now });
+      }
+    }
   }
 }

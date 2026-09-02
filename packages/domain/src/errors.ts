@@ -74,7 +74,33 @@ export type DomainErrorCode =
   /** The winner's window to pay has passed. */
   | 'BID_RESERVATION_EXPIRED'
   /** The product already has a bid session open in this live. */
-  | 'BID_SESSION_ALREADY_OPEN';
+  | 'BID_SESSION_ALREADY_OPEN'
+  // --- Imagenes de perfil y tienda (M06) --------------------------------
+  /**
+   * La clave de imagen no tiene la forma que emitimos, o es de otro dueno.
+   *
+   * Un solo codigo para ambos casos a proposito: distinguirlos le diria a quien
+   * prueba claves ajenas cuales existen.
+   */
+  | 'INVALID_MEDIA_KEY'
+  /** El almacenamiento de imagenes refuso la operacion o esta inalcanzable. */
+  | 'STORAGE_UNAVAILABLE'
+  // --- Ingreso con Google / Meta (M07) ----------------------------------
+  /** El proveedor no compartio un email, y sin email no hay a quien vincular. */
+  | 'IDENTITY_EMAIL_REQUIRED'
+  /** El proveedor de identidad refuso o esta inalcanzable. */
+  | 'IDENTITY_UNAVAILABLE'
+  /** Ese proveedor no esta habilitado en esta instalacion. */
+  | 'IDENTITY_PROVIDER_DISABLED'
+  // --- Contrasenas (M08) -------------------------------------------------
+  /** Falta la contrasena actual, y esta cuenta tiene una. */
+  | 'CURRENT_PASSWORD_REQUIRED'
+  /** La contrasena actual no coincide. */
+  | 'CURRENT_PASSWORD_INVALID'
+  /** El enlace para restablecer vencio, ya se uso, o no existe. */
+  | 'RESET_TOKEN_INVALID'
+  /** El proveedor de correo refuso o esta inalcanzable. */
+  | 'EMAIL_UNAVAILABLE';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

@@ -14,6 +14,7 @@ import { toUserDto } from '../mappers/dto.mappers';
 import type { Clock, IdGenerator } from '../ports/infrastructure';
 import type { UserRepository } from '../ports/repositories';
 import { CLOCK, ID_GENERATOR, USER_REPOSITORY } from '../ports/tokens';
+import { MediaService } from './media.service';
 
 /**
  * Accounts are single and additive: everybody registers as a buyer, and
@@ -28,6 +29,7 @@ export class AuthService {
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
+    private readonly media: MediaService,
   ) {}
 
   async register(input: RegisterRequest): Promise<SessionDto> {
@@ -47,6 +49,8 @@ export class AuthService {
       email,
       phone: input.phone ?? null,
       avatarUrl: null,
+      bio: null,
+      passwordChangedAt: null,
       country: input.country,
       roles: ['buyer'],
       status: 'active',
@@ -100,7 +104,16 @@ export class AuthService {
       ...current,
       name: input.name?.trim() ?? current.name,
       phone: input.phone === undefined ? current.phone : input.phone,
-      avatarUrl: input.avatarUrl === undefined ? current.avatarUrl : input.avatarUrl,
+      // La foto entra por clave y se resuelve acá. `MediaService.resolve`
+      // comprueba que sea nuestra y de esta persona antes de guardar nada:
+      // hasta M06 este campo aceptaba cualquier URL de internet.
+      avatarUrl: this.media.resolve({
+        key: input.avatarKey,
+        current: current.avatarUrl,
+        ownerId: id,
+        purpose: 'avatar',
+      }),
+      bio: input.bio === undefined ? current.bio : (input.bio?.trim() || null),
       updatedAt: this.clock.now(),
     });
     return toUserDto(updated);

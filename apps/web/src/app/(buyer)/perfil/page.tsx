@@ -52,13 +52,24 @@ export default async function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-6 pt-safe">
-      <header className="flex items-center gap-3 px-4 pt-2">
-        <Avatar src={user.avatarUrl} name={user.name} size={60} />
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[22px] font-extrabold tracking-tight">{user.name}</h1>
-          <p className="truncate text-[13px] text-subtle">{user.email}</p>
+      <header className="flex flex-col gap-3 px-4 pt-2">
+        <div className="flex items-center gap-3">
+          <Avatar src={user.avatarUrl} name={user.name} size={60} />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[22px] font-extrabold tracking-tight">{user.name}</h1>
+            <p className="truncate text-[13px] text-subtle">{user.email}</p>
+          </div>
+          {isSeller ? <Badge tone="neutral">Vendedor</Badge> : null}
         </div>
-        {isSeller ? <Badge tone="neutral">Vendedor</Badge> : null}
+
+        {user.bio ? <p className="text-[14px] leading-snug text-ink">{user.bio}</p> : null}
+
+        <Link
+          href="/perfil/editar"
+          className="inline-flex h-10 items-center justify-center self-start rounded-2xl border border-line bg-surface px-4 text-[14px] font-bold text-ink transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          Editar perfil
+        </Link>
       </header>
 
       <section className="grid grid-cols-2 gap-3 px-4">
@@ -130,6 +141,18 @@ export default async function ProfilePage() {
           <Row label="País" value={user.country === 'UY' ? 'Uruguay' : user.country} />
           <Row label="Roles" value={user.roles.join(', ')} />
         </dl>
+        <Link
+          href="/perfil/seguridad"
+          className="flex items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-4 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-bold">Seguridad</p>
+            <p className="text-[13px] leading-snug text-subtle">
+              Tu contraseña y cómo entrás a la cuenta.
+            </p>
+          </div>
+          <ChevronRightIcon className="size-5 shrink-0 text-subtle" />
+        </Link>
         <SignOutButton />
       </section>
     </div>

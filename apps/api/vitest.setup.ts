@@ -28,6 +28,11 @@ process.env.NODE_ENV = 'test';
 process.env.DATA_DRIVER = 'memory';
 process.env.CACHE_DRIVER = 'memory';
 process.env.STREAMING_PROVIDER = 'mock';
+// El proveedor de identidad simulado, bajo el nombre `google`: la suite
+// ejercita las rutas de produccion sin hablar con accounts.google.com.
+process.env.OAUTH_PROVIDERS = 'fake';
+// El correo va al log; las pruebas que lo necesitan espian el puerto.
+process.env.EMAIL_PROVIDER = 'log';
 
 // Borradas, no sobrescritas: si un día algo vuelve a elegir postgres por su
 // cuenta, que falle por falta de URL en vez de encontrar una base real.

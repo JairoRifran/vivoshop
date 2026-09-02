@@ -115,6 +115,16 @@ export default defineConfig({
         STREAMING_PROVIDER: 'mock',
         E2E_RESET_TOKEN: RESET_TOKEN,
         /**
+         * Imágenes en memoria, y la base pública apuntando a *este* puerto.
+         *
+         * `API_PUBLIC_URL` importa: es lo que la API pone en la URL de subida y
+         * en la URL pública de cada imagen. Con el valor por defecto (`:4000`)
+         * el navegador subiría contra un servidor que en esta corrida no
+         * existe, y la prueba fallaría por la configuración y no por el código.
+         */
+        STORAGE_PROVIDER: 'local',
+        API_PUBLIC_URL: API_URL,
+        /**
          * Avisos activos en la suite, con claves VAPID de juguete.
          *
          * Con `log` la clave pública es `null` y la pantalla —correctamente—
@@ -127,6 +137,24 @@ export default defineConfig({
           'BJxKjbfF4qLZ7VjXm2vQ8Y3nJ0hR5tWc9Dg1SsPoIuYtRe4WqAzXcVbNmKlJhGfDsAqWeRtYuIoPaSdFgHjKlZx',
         VAPID_PRIVATE_KEY: 'kZ8pQr3sTuVwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZ00',
         VAPID_SUBJECT: 'mailto:e2e@vivoshop.uy',
+        /**
+         * Ingreso social con el proveedor simulado, bajo el nombre `google`.
+         *
+         * Es lo que hace posible probar el recorrido entero sin hablar con
+         * `accounts.google.com` —que probaría a Google y fallaría cuando Google
+         * se cayera— y sin credenciales en el repositorio. Las rutas, el
+         * `state`, el PKCE, el vale y la sesión son los de producción.
+         */
+        OAUTH_PROVIDERS: 'fake',
+        /**
+         * El correo al log, y la base publica apuntando a *este* puerto.
+         *
+         * `WEB_PUBLIC_URL` importa: es lo que la API pone en el enlace del
+         * correo. Con el valor por defecto el enlace apuntaria a un servidor
+         * que en esta corrida no existe.
+         */
+        EMAIL_PROVIDER: 'log',
+        WEB_PUBLIC_URL: WEB_URL,
       },
     },
     {

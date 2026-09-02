@@ -1,4 +1,5 @@
 import type {
+  AuthProvider,
   Follow,
   LiveMessage,
   LiveSession,
@@ -17,6 +18,8 @@ import type {
   StoreId,
   User,
   UserId,
+  UserIdentity,
+  PasswordResetToken,
 } from '@vivo/domain';
 
 /**
@@ -36,8 +39,65 @@ export interface UserRepository {
   findById(id: UserId): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
   findCredentialsByEmail(email: string): Promise<StoredCredentials | null>;
-  create(user: User, passwordHash: string): Promise<User>;
+  /**
+   * `passwordHash` es null para una cuenta que solo se abre con un proveedor.
+   *
+   * El login por contrasena tiene que leer ese null como credenciales
+   * invalidas --nunca como "no hace falta contrasena"--.
+   */
+  create(user: User, passwordHash: string | null): Promise<User>;
+  /**
+   * Escribe la contrasena y **fecha el corte de sesiones** en la misma
+   * operacion.
+   *
+   * Los dos juntos a proposito: separarlos deja una ventana en la que la
+   * contrasena ya cambio y las sesiones viejas siguen valiendo, que es
+   * exactamente lo que se esta tratando de cerrar.
+   */
+  setPassword(id: UserId, passwordHash: string, changedAt: Date): Promise<void>;
   update(user: User): Promise<User>;
+}
+
+/**
+ * El `state` del ingreso social, en vuelo.
+ *
+ * Se emite antes de mandar a la persona al proveedor y se consume **una sola
+ * vez** al volver: sin eso, un `state` reutilizable deja de proteger contra
+ * CSRF, que es lo unico para lo que existe.
+ */
+export interface LoginState {
+  readonly state: string;
+  readonly provider: AuthProvider;
+  readonly codeVerifier: string;
+  readonly returnTo: string;
+  readonly createdAt: Date;
+  readonly expiresAt: Date;
+  readonly consumedAt: Date | null;
+}
+
+export interface LoginStateRepository {
+  create(state: LoginState): Promise<void>;
+  /** Devuelve el estado y lo marca usado, o null si no existe/vencio/ya se uso. */
+  consume(state: string, now: Date): Promise<LoginState | null>;
+}
+
+export interface PasswordResetRepository {
+  create(token: PasswordResetToken): Promise<void>;
+  /** Devuelve el permiso y lo marca usado, o null si no sirve. Un solo uso. */
+  consume(tokenHash: string, now: Date): Promise<PasswordResetToken | null>;
+  /**
+   * Invalida todos los pendientes de esa persona.
+   *
+   * Quien pidio tres correos y uso el ultimo no deberia quedarse con dos llaves
+   * mas dando vueltas en su buzon.
+   */
+  consumeAllFor(userId: UserId, now: Date): Promise<void>;
+}
+
+export interface UserIdentityRepository {
+  find(provider: AuthProvider, providerUserId: string): Promise<UserIdentity | null>;
+  listForUser(userId: UserId): Promise<UserIdentity[]>;
+  link(identity: UserIdentity): Promise<UserIdentity>;
 }
 
 export interface StoreQuery {

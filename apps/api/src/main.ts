@@ -25,7 +25,10 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: env.corsOrigins,
     credentials: false,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    // PUT está por las subidas de imágenes: con `STORAGE_PROVIDER=local` los
+    // bytes van del navegador a esta API, y `Content-Type: image/webp` obliga
+    // al navegador a preguntar antes con OPTIONS.
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 

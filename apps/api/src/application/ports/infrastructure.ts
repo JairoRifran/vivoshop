@@ -1,12 +1,13 @@
 import type { CurrencyCode } from '@vivo/config';
 import type {
+  AuthProvider,
+  ProviderProfile,
   LiveCapabilities,
   LiveSessionId,
   Order,
   OrderId,
   PaymentStatus,
   StoreId,
-  UserId,
 } from '@vivo/domain';
 
 // --- Time and identity ---------------------------------------------------------
@@ -211,11 +212,86 @@ export interface StoredFile {
   readonly key: string;
 }
 
+/**
+ * Dónde viven las imágenes.
+ *
+ * ## Por qué los bytes no pasan por la API
+ *
+ * El navegador pide un destino, sube **directo** al almacenamiento, y después
+ * nos manda la clave. La API nunca ve el archivo. La alternativa —recibirlo y
+ * reenviarlo— haría que cada foto de perfil ocupe un proceso de Node durante
+ * toda la subida, que en un teléfono con 4G puede ser medio minuto, y pondría
+ * el límite de tamaño en manos del servidor equivocado.
+ *
+ * ## Lo que vuelve es una clave, no una URL
+ *
+ * `createUploadTarget` decide la clave; el llamador la guarda y arma la URL
+ * pública con `publicUrl`. Que el cliente no elija la URL es lo que impide que
+ * alguien ponga en su avatar la foto de otro —o una baliza de un servidor
+ * ajeno—. La comprobación vive en `assertOwnMediaKey`, en el dominio.
+ */
+/**
+ * Mandar un correo.
+ *
+ * Deliberadamente angosto: un destinatario, un asunto y un cuerpo. No hay
+ * plantillas, ni adjuntos, ni listas. Lo unico que manda correo en VivoShop hoy
+ * es el restablecimiento de contrasena, y un puerto que prometa mas de lo que
+ * se usa es un puerto que nadie sabe si funciona.
+ */
+export interface EmailProvider {
+  readonly key: string;
+  send(input: {
+    to: string;
+    subject: string;
+    /** Texto plano. Es el cuerpo real: no todos los clientes muestran HTML. */
+    text: string;
+    html?: string;
+  }): Promise<void>;
+}
+
+/**
+ * Un tercero que afirma quien es alguien.
+ *
+ * Dos metodos y ninguna decision de producto: manda a la persona al proveedor,
+ * y despues cambia el codigo por un perfil. **A quien pertenece ese perfil
+ * --entrar, vincular, registrar o pedir la contrasena-- lo decide el dominio**,
+ * en `resolveIdentityOutcome`. Es la misma separacion que hace que el adaptador
+ * de Mercado Pago no sepa de comisiones.
+ */
+export interface IdentityProvider {
+  readonly key: AuthProvider;
+  /**
+   * A donde mandar a la persona.
+   *
+   * `codeChallenge` es PKCE: el verificador queda del lado del servidor, asi
+   * que un codigo de autorizacion interceptado --en un historial, en un log de
+   * un proxy, en un `Referer`-- no se puede canjear sin el.
+   */
+  authorizationUrl(input: {
+    state: string;
+    codeChallenge: string;
+    redirectUri: string;
+  }): string;
+  exchange(input: {
+    code: string;
+    codeVerifier: string;
+    redirectUri: string;
+  }): Promise<ProviderProfile>;
+}
+
 export interface StorageProvider {
   readonly key: string;
-  /** Returns the URL a client should upload to, plus the final public URL. */
+  /**
+   * Un destino para subir, con vencimiento.
+   *
+   * `uploadUrl` es de un solo uso y dura poco: es una autorización para
+   * escribir un archivo concreto, no una llave del bucket.
+   */
   createUploadTarget(input: {
-    ownerId: UserId;
+    key: string;
     contentType: string;
-  }): Promise<{ uploadUrl: string; file: StoredFile }>;
+    maxBytes: number;
+  }): Promise<{ uploadUrl: string; expiresAt: Date }>;
+  /** La URL pública de una clave ya subida. */
+  publicUrl(key: string): string;
 }

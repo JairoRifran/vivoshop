@@ -3,6 +3,7 @@
 import type { StoreDetailDto } from '@vivo/shared';
 import { Button, SelectField, TextArea, TextInput } from '@vivo/ui';
 import { useActionState } from 'react';
+import { ImageField } from '@/components/image-field';
 import { updateStoreSettings } from '@/lib/actions/seller';
 import { IDLE } from '@/lib/actions/state';
 
@@ -24,6 +25,25 @@ export function StoreSettingsForm({ store }: { store: StoreDetailDto }) {
         </p>
       ) : null}
 
+      {/* La identidad primero: es lo que ve quien entra a la tienda, y lo que
+          más distingue una tienda de otra en una grilla. */}
+      <ImageField
+        name="logoKey"
+        purpose="store_logo"
+        label="Logo"
+        shape="square"
+        currentUrl={store.logoUrl}
+        hint="Cuadrado. Aparece en la grilla, en el vivo y en cada producto."
+      />
+      <ImageField
+        name="coverKey"
+        purpose="store_cover"
+        label="Portada"
+        shape="wide"
+        currentUrl={store.coverUrl}
+        hint="Apaisada. Es el encabezado de tu tienda."
+      />
+
       <TextInput label="Nombre" name="name" defaultValue={store.name} required maxLength={60} />
       <TextArea
         label="Descripción"
@@ -33,6 +53,14 @@ export function StoreSettingsForm({ store }: { store: StoreDetailDto }) {
         defaultValue={store.description}
       />
       <TextInput label="Ciudad" name="city" defaultValue={store.city ?? ''} />
+      <TextInput
+        label="WhatsApp"
+        name="whatsapp"
+        type="tel"
+        inputMode="tel"
+        defaultValue={store.whatsapp ?? ''}
+        hint="Opcional. Se muestra en tu tienda para coordinar entregas."
+      />
       <TextInput
         label="Envío gratis desde"
         name="freeShippingThreshold"

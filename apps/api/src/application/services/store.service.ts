@@ -13,6 +13,7 @@ import type { Clock, IdGenerator } from '../ports/infrastructure';
 import type { FollowRepository, LiveRepository, StoreRepository } from '../ports/repositories';
 import { CLOCK, FOLLOW_REPOSITORY, ID_GENERATOR, LIVE_REPOSITORY, STORE_REPOSITORY } from '../ports/tokens';
 import { AuthService } from './auth.service';
+import { MediaService } from './media.service';
 
 @Injectable()
 export class StoreService {
@@ -23,6 +24,7 @@ export class StoreService {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     private readonly auth: AuthService,
+    private readonly media: MediaService,
   ) {}
 
   async requireById(id: StoreId): Promise<Store> {
@@ -134,8 +136,21 @@ export class StoreService {
       description: input.description ?? store.description,
       category: input.category ?? store.category,
       city: input.city === undefined ? store.city : input.city,
-      logoUrl: input.logoUrl === undefined ? store.logoUrl : input.logoUrl,
-      coverUrl: input.coverUrl === undefined ? store.coverUrl : input.coverUrl,
+      // Igual que el avatar: entra una clave, se comprueba de quién es y recién
+      // ahí se guarda una URL. El dueño de la clave es la persona, no la
+      // tienda, porque quien sube es quien está en sesión.
+      logoUrl: this.media.resolve({
+        key: input.logoKey,
+        current: store.logoUrl,
+        ownerId,
+        purpose: 'store_logo',
+      }),
+      coverUrl: this.media.resolve({
+        key: input.coverKey,
+        current: store.coverUrl,
+        ownerId,
+        purpose: 'store_cover',
+      }),
       status: input.status ?? store.status,
       settings: {
         ...store.settings,
@@ -148,6 +163,8 @@ export class StoreService {
           input.pickupInstructions === undefined
             ? store.settings.pickupInstructions
             : input.pickupInstructions,
+        whatsapp:
+          input.whatsapp === undefined ? store.settings.whatsapp : (input.whatsapp || null),
       },
       updatedAt: this.clock.now(),
     });

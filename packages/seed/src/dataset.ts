@@ -135,15 +135,17 @@ interface UserBlueprint {
   readonly email: string;
   readonly phone: string | null;
   readonly seller: boolean;
+  /** Una línea sobre quién es. Las vendedoras la tienen; se ve en su tienda. */
+  readonly bio?: string;
 }
 
 const USER_BLUEPRINTS: readonly UserBlueprint[] = [
   { key: 'ana', name: 'Ana Pérez', email: 'ana@vivo.uy', phone: '+59899123456', seller: false },
-  { key: 'martina', name: 'Martina Silva', email: 'martina@vivo.uy', phone: '+59899234567', seller: true },
-  { key: 'lucia', name: 'Lucía Ferrari', email: 'lucia@vivo.uy', phone: '+59899345678', seller: true },
-  { key: 'diego', name: 'Diego Rivas', email: 'diego@vivo.uy', phone: '+59899456789', seller: true },
-  { key: 'sofia', name: 'Sofía Núñez', email: 'sofia@vivo.uy', phone: '+59899567890', seller: true },
-  { key: 'rodrigo', name: 'Rodrigo Méndez', email: 'rodrigo@vivo.uy', phone: '+59899678901', seller: true },
+  { key: 'martina', name: 'Martina Silva', email: 'martina@vivo.uy', phone: '+59899234567', seller: true, bio: 'Curaduría de prendas que uso yo primero. Vivos los jueves.' },
+  { key: 'lucia', name: 'Lucía Ferrari', email: 'lucia@vivo.uy', phone: '+59899345678', seller: true, bio: 'Trabajo con marcas uruguayas chicas. Pregunten lo que quieran.' },
+  { key: 'diego', name: 'Diego Rivas', email: 'diego@vivo.uy', phone: '+59899456789', seller: true, bio: 'Doce años reparando y vendiendo tecnología en Montevideo.' },
+  { key: 'sofia', name: 'Sofía Núñez', email: 'sofia@vivo.uy', phone: '+59899567890', seller: true, bio: 'Cosmética sin vueltas: te digo qué ingrediente hace qué.' },
+  { key: 'rodrigo', name: 'Rodrigo Méndez', email: 'rodrigo@vivo.uy', phone: '+59899678901', seller: true, bio: 'Coleccionista desde los diez. Vendo lo que me costó conseguir.' },
   { key: 'camila', name: 'Camila Rossi', email: 'camila@vivo.uy', phone: null, seller: false },
   { key: 'joaquin', name: 'Joaquín Bentancur', email: 'joaquin@vivo.uy', phone: null, seller: false },
   { key: 'valentina', name: 'Valentina Cabrera', email: 'valentina@vivo.uy', phone: null, seller: false },
@@ -261,6 +263,8 @@ function buildUsers(now: Date): DemoUser[] {
     email: blueprint.email,
     phone: blueprint.phone,
     avatarUrl: `/media/avatar/${blueprint.key}`,
+    bio: blueprint.bio ?? null,
+    passwordChangedAt: null,
     country: 'UY' as const,
     roles: blueprint.seller ? (['buyer', 'seller'] as const) : (['buyer'] as const),
     status: 'active' as const,

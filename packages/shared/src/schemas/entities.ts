@@ -34,6 +34,7 @@ export const userSchema = z.object({
   email: z.string(),
   phone: z.string().nullable(),
   avatarUrl: z.string().nullable(),
+  bio: z.string().nullable(),
   country: countrySchema,
   roles: z.array(z.enum(USER_ROLES)),
   createdAt: isoDateSchema,
@@ -92,6 +93,8 @@ export const storeDetailSchema = storeSummarySchema.extend({
   freeShippingThresholdMinor: minorAmountSchema.nullable(),
   pickupInstructions: z.string().nullable(),
   acceptsReturns: z.boolean(),
+  /** Contacto directo, si la tienda lo publicó. Solo el número, sin enlace. */
+  whatsapp: z.string().nullable(),
   createdAt: isoDateSchema,
 });
 export type StoreDetailDto = z.infer<typeof storeDetailSchema>;

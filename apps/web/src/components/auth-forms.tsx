@@ -23,7 +23,16 @@ function fieldError(state: ActionState, field: string): string | undefined {
   return state.fieldErrors?.[field]?.[0];
 }
 
-export function SignInForm({ next }: { next: string }) {
+export function SignInForm({
+  next,
+  defaultEmail = '',
+  canRecover = false,
+}: {
+  next: string;
+  defaultEmail?: string;
+  /** Si hay proveedor de correo. Sin el, el enlace llevaria a un 404. */
+  canRecover?: boolean;
+}) {
   const [state, action, pending] = useActionState(signIn, IDLE);
 
   return (
@@ -49,6 +58,10 @@ export function SignInForm({ next }: { next: string }) {
         spellCheck={false}
         placeholder="ana@vivo.uy"
         required
+        // Precargado cuando se llega rebotando de un proveedor que no verificó
+        // el email: la persona ya escribió su email allá, pedírselo de nuevo
+        // sería castigarla por nuestra regla de seguridad.
+        defaultValue={defaultEmail}
         error={fieldError(state, 'email')}
       />
       <TextInput
@@ -60,6 +73,15 @@ export function SignInForm({ next }: { next: string }) {
         required
         error={fieldError(state, 'password')}
       />
+
+      {canRecover ? (
+        <Link
+          href="/ingresar/olvide"
+          className="-mt-2 self-end text-[14px] font-bold text-subtle underline underline-offset-4 hover:text-ink"
+        >
+          ¿Olvidaste tu contraseña?
+        </Link>
+      ) : null}
 
       <Button type="submit" loading={pending} block>
         Ingresar

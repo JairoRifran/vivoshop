@@ -9,8 +9,11 @@ import { CoreModule } from './core.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { AuthController } from './modules/auth.controller';
+import { SocialAuthController } from './modules/social-auth.controller';
+import { PasswordController } from './modules/password.controller';
 import { ProductsController, StoresController } from './modules/catalog.controller';
 import { LiveController } from './modules/live.controller';
+import { MediaController } from './modules/media.controller';
 import { BidsController, SellerBidsController } from './modules/bids.controller';
 import { CheckoutController, OrdersController } from './modules/orders.controller';
 import {
@@ -52,9 +55,12 @@ import { TestingModule } from './modules/testing.controller';
     SystemController,
     NotificationsController,
     AuthController,
+    SocialAuthController,
+    PasswordController,
     StoresController,
     ProductsController,
     LiveController,
+    MediaController,
     CheckoutController,
     OrdersController,
     SellerController,
