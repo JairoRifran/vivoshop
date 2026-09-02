@@ -506,15 +506,15 @@ variables de arriba habilita el flujo; no conecta ninguna tienda.
 | Modo Puja en producción | **PARCIAL** — esquema, versión desplegada (`/health` devuelve el commit) y rutas verificados. Una puja real de punta a punta **NO** se ejecutó: exige poner la tienda al aire, y eso es tuyo. |
 | Cobros con Mercado Pago en producción | **ACTIVO Y REAL** — `/payments/capabilities` devuelve `provider: mercadopago`, `level: refund_only`, y los logos del arranque dicen `Modo productivo: los cobros son reales`. En M04.1 se ejecutó un cobro real de $1.490 y su devolución parcial de $490. Esta fila decía `fake` y estaba desactualizada: corregida el 2 de septiembre de 2026. Ver `docs/m03.md` §17 y `docs/m04-1.md`. |
 | Migraciones `0009`, `0010` y `0011` | **VERIFICADO** — `Migraciones aplicadas.` en los logs del despliegue `f48eafc`, antes del arranque. `0010` además se ejercitó: `/auth/google/start` escribe en `login_states` y devolvió 302. |
-| Ingreso con Google en producción | **PARCIAL** — `/auth/providers` devuelve `["google"]` y `/auth/google/start` redirige a Google con la URI registrada. El viaje completo con una cuenta real no se hizo: exige la contraseña del dueño. |
+| Ingreso con Google en producción | **VERIFICADO** — el viaje completo con una cuenta real de Google funcionó el 2/9/2026. Cubre el canje del código, que es el único paso que usa el `GOOGLE_CLIENT_SECRET`. El secreto viejo quedó inhabilitado después de confirmarlo. |
 | Recuperación de contraseña en producción | **PARCIAL** — `/auth/password/status` devuelve `canRecover: true` y las dos pantallas responden 200. No se pidió un enlace real. |
-| Almacenamiento en Supabase | **PARCIAL** — bucket `vivoshop-media` creado y la API arranca con `STORAGE_PROVIDER=supabase`. Ninguna foto se subió todavía. |
+| Almacenamiento en Supabase | **VERIFICADO** — una foto de perfil real quedó en `avatar/usr_…/….webp`, `image/webp`, 19.360 bytes, y se lee por su URL pública con 200. |
 | `vivoshop.live` sirviendo la aplicación | **VERIFICADO** — 200 en `/`, `/ingresar`, `/crear-cuenta`, `/ingresar/olvide` y `/ingresar/restablecer`, contra datos reales de la base. |
 | El guardia de `env.ts` en producción | **VERIFICADO por accidente** — el despliegue del mismo commit **sin** las variables nuevas murió en el `preDeployCommand`, que es exactamente lo prometido. |
 
-Lo de arriba es honesto a propósito. Las filas **PARCIAL** lo son por la misma
-razón en los tres casos: lo que falta exige una cuenta y una contraseña de una
-persona real, y eso no lo hace un agente.
+Lo de arriba es honesto a propósito. Queda una sola fila **PARCIAL**, la de
+contraseñas, y lo es por la razón de siempre: pedir un enlace real manda un
+correo a una casilla real, y esa es una acción del dueño de la casilla.
 
 ---
 
