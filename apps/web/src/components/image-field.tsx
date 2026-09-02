@@ -93,7 +93,15 @@ export function ImageField({
     <div className="flex flex-col gap-2">
       <span className="text-[13px] font-semibold text-ink">{label}</span>
 
-      <div className="flex items-center gap-3">
+      {/*
+        Apaisada apila; cuadrada y circular van al lado del texto.
+
+        Una sola fila para las tres formas parecia mas simple y no lo era: la
+        portada ocupa todo el ancho, asi que la ayuda quedaba en una columna de
+        una palabra por linea y se salia de la tarjeta. Con `wide` la miniatura
+        ya no es una miniatura --es una franja-- y el texto va debajo.
+      */}
+      <div className={cn('flex gap-3', shape === 'wide' ? 'flex-col' : 'items-center')}>
         <label
           htmlFor={inputId}
           className={cn(
@@ -128,7 +136,14 @@ export function ImageField({
           />
         </label>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div
+          className={cn(
+            'flex min-w-0 flex-col gap-1',
+            // Apilada no compite por el ancho: `flex-1` la estiraria al alto de
+            // la franja y dejaria el texto flotando en el medio.
+            shape === 'wide' ? 'items-start' : 'flex-1',
+          )}
+        >
           {hint ? <p className="text-[12px] leading-snug text-subtle">{hint}</p> : null}
           {preview ? (
             <button
