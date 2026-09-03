@@ -294,4 +294,21 @@ export interface StorageProvider {
   }): Promise<{ uploadUrl: string; expiresAt: Date }>;
   /** La URL pública de una clave ya subida. */
   publicUrl(key: string): string;
+  /**
+   * La operación inversa de `publicUrl`: de vuelta a la clave, o `null`.
+   *
+   * Hace falta porque en la base guardamos la URL, no la clave. Devuelve `null`
+   * para cualquier URL que no sea nuestra —las de las cuentas viejas apuntan a
+   * avatares generados que nunca fueron archivos— y así el que llama sabe que
+   * no hay nada que borrar en vez de intentarlo y fallar.
+   */
+  keyFromPublicUrl(url: string): string | null;
+  /**
+   * Borra un archivo. Idempotente: que no exista no es un error.
+   *
+   * Existe para el borrado de cuenta. Prometer en la política de privacidad que
+   * la foto se va y dejar el archivo accesible por su URL es la clase de
+   * promesa que conviene no hacer.
+   */
+  remove(key: string): Promise<void>;
 }

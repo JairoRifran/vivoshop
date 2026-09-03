@@ -92,6 +92,36 @@ export class SupabaseStorageProvider implements StorageProvider {
   publicUrl(key: string): string {
     return `${this.base}/storage/v1/object/public/${this.bucket}/${key}`;
   }
+
+  keyFromPublicUrl(url: string): string | null {
+    const prefijo = `${this.base}/storage/v1/object/public/${this.bucket}/`;
+    if (!url.startsWith(prefijo)) return null;
+    const clave = url.slice(prefijo.length);
+    return clave.length > 0 ? clave : null;
+  }
+
+  async remove(key: string): Promise<void> {
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetch(`${this.base}/storage/v1/object/${this.bucket}/${key}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${this.serviceKey}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (cause) {
+      throw new DomainError('STORAGE_UNAVAILABLE', 'No pudimos borrar el archivo.', {
+        cause: cause instanceof Error ? cause.message : 'unknown',
+      });
+    }
+
+    // 404 es exito para esta operacion: el objetivo era que no estuviera.
+    if (!response.ok && response.status !== 404) {
+      this.logger.error(`Supabase respondió ${response.status} al borrar un archivo.`);
+      throw new DomainError('STORAGE_UNAVAILABLE', 'No pudimos borrar el archivo.', {
+        status: response.status,
+      });
+    }
+  }
 }
 
 /**

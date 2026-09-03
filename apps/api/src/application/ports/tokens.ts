@@ -32,6 +32,7 @@ export const USER_IDENTITY_REPOSITORY = Symbol('UserIdentityRepository');
 export const LOGIN_STATE_REPOSITORY = Symbol('LoginStateRepository');
 export const EMAIL_PROVIDER = Symbol('EmailProvider');
 export const PASSWORD_RESET_REPOSITORY = Symbol('PasswordResetRepository');
+export const ACCOUNT_DELETION_REPOSITORY = Symbol('AccountDeletionRepository');
 
 export const CLOCK = Symbol('Clock');
 export const ID_GENERATOR = Symbol('IdGenerator');

@@ -101,6 +101,14 @@ const DOMAIN_STATUS: Partial<Record<DomainErrorCode, HttpStatus>> = {
   BID_TOO_LOW: HttpStatus.BAD_REQUEST,
   INVALID_BID_AMOUNT: HttpStatus.BAD_REQUEST,
   BID_NOT_IN_SESSION: HttpStatus.BAD_REQUEST,
+  // --- Borrado de cuenta ---------------------------------------------------
+  // Conflicto y no 400: la petición está perfecta, lo que pasa es que el mundo
+  // todavía no permite ese borrado. La misma petición va a funcionar cuando se
+  // cierre el último pedido, y un 400 diría que se equivocó al pedirlo.
+  ACCOUNT_HAS_PENDING_SALES: HttpStatus.CONFLICT,
+  ACCOUNT_HAS_PENDING_ORDERS: HttpStatus.CONFLICT,
+  // Esta sí es la petición: lo que escribió no coincide.
+  ACCOUNT_CONFIRMATION_MISMATCH: HttpStatus.BAD_REQUEST,
   // No es un error de datos: es algo que esta persona no puede hacer.
   CANNOT_BID_ON_OWN_STORE: HttpStatus.FORBIDDEN,
 };

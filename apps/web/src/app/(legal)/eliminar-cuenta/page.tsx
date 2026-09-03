@@ -34,7 +34,14 @@ export default function EliminarCuentaPage() {
         Podés pedir que borremos tu cuenta cuando quieras, sin dar explicaciones y sin costo.
       </p>
 
-      <h2>Cómo se pide</h2>
+      <h2>Desde la aplicación</h2>
+      <p>
+        La forma más rápida: entrá a tu cuenta y andá a{' '}
+        <Link href="/perfil/eliminar">Perfil → Eliminar cuenta</Link>. Se confirma escribiendo tu
+        propio correo y se ejecuta en el momento.
+      </p>
+
+      <h2>Por correo, si preferís</h2>
       <p>
         Escribinos a <a href="mailto:hola@vivoshop.live">hola@vivoshop.live</a>{' '}
         <strong>desde la dirección de correo de tu cuenta</strong>, con el asunto{' '}
@@ -58,12 +65,12 @@ export default function EliminarCuentaPage() {
         <li>El vínculo con tu cuenta de Google, si habías entrado con ella.</li>
         <li>Las tiendas que seguís y tus preferencias de aviso.</li>
         <li>Las suscripciones a notificaciones de tus dispositivos.</li>
-        <li>Si tenías tienda: la tienda, sus productos y sus imágenes.</li>
       </ul>
 
       <h2>Qué NO se borra, y por qué</h2>
       <p>
-        Hay dos cosas que sobreviven, y preferimos decirlo acá antes de que las descubras después:
+        Hay tres cosas que sobreviven, y preferimos decirlo acá antes de que las descubras
+        después:
       </p>
       <ul>
         <li>
@@ -75,6 +82,11 @@ export default function EliminarCuentaPage() {
           <strong>Los mensajes que escribiste en un chat en vivo.</strong> Se despersonalizan —dejan
           de mostrar tu nombre y tu foto— pero el texto queda, porque forma parte de una conversación
           pública en la que participaron otras personas.
+        </li>
+        <li>
+          <strong>Tu tienda, si tenías.</strong> Deja de estar publicada y no se puede volver a
+          abrir, pero el registro sobrevive: los pedidos históricos la referencian, y quien te
+          compró tiene derecho a ver a quién le compró.
         </li>
       </ul>
 

@@ -7,6 +7,7 @@ export * from './entities/catalog';
 export * from './entities/live';
 export * from './entities/order';
 export * from './entities/bid';
+export * from './entities/account';
 export * from './entities/media';
 export * from './entities/identity';
 export * from './entities/password';

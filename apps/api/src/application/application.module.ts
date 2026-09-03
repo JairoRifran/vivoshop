@@ -16,6 +16,7 @@ import { VerificationService } from './services/verification.service';
 import { SellerService } from './services/seller.service';
 import { StoreService } from './services/store.service';
 import { SocialAuthService } from './services/social-auth.service';
+import { AccountService } from './services/account.service';
 import { PasswordFlowService } from './services/password.service';
 
 const SERVICES = [
@@ -24,6 +25,7 @@ const SERVICES = [
   AuthService,
   SocialAuthService,
   PasswordFlowService,
+  AccountService,
   StoreService,
   CatalogService,
   LiveService,

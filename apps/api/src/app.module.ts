@@ -10,6 +10,7 @@ import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 import { AuthController } from './modules/auth.controller';
 import { SocialAuthController } from './modules/social-auth.controller';
+import { AccountController } from './modules/account.controller';
 import { PasswordController } from './modules/password.controller';
 import { ProductsController, StoresController } from './modules/catalog.controller';
 import { LiveController } from './modules/live.controller';
@@ -57,6 +58,7 @@ import { TestingModule } from './modules/testing.controller';
     AuthController,
     SocialAuthController,
     PasswordController,
+    AccountController,
     StoresController,
     ProductsController,
     LiveController,

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { isWatchable } from '@vivo/domain';
+import { isOrderInFlight, isWatchable } from '@vivo/domain';
 import type {
   AuthProvider,
   UserIdentity,
@@ -39,6 +39,7 @@ import type {
   LoginStateRepository,
   LoginState,
   PasswordResetRepository,
+  AccountDeletionRepository,
   PushDeliveryRepository,
   PushSubscriptionRepository,
 } from '../../../application/ports/repositories';
@@ -541,5 +542,100 @@ export class MemoryPasswordResetRepository implements PasswordResetRepository {
         this.db.passwordResets.set(hash, { ...token, consumedAt: now });
       }
     }
+  }
+}
+
+/**
+ * El borrado de cuenta, en memoria.
+ *
+ * Recorre las mismas ocho colecciones que el adaptador de Postgres toca en su
+ * transaccion. No hay transaccion aca --el proceso es de un solo hilo-- pero el
+ * orden y el alcance tienen que ser identicos: si este driver borrara de menos,
+ * las pruebas pasarian en memoria y fallarian contra la base de verdad.
+ */
+@Injectable()
+export class MemoryAccountDeletionRepository implements AccountDeletionRepository {
+  constructor(private readonly db: MemoryDatabase) {}
+
+  async countOrdersInFlight(
+    userId: UserId,
+  ): Promise<{ comoComprador: number; comoVendedor: number }> {
+    const mias = new Set(
+      [...this.db.stores.values()]
+        .filter((store) => String(store.ownerId) === String(userId))
+        .map((store) => String(store.id)),
+    );
+
+    let comoComprador = 0;
+    let comoVendedor = 0;
+    for (const order of this.db.orders.values()) {
+      if (!isOrderInFlight(order.status)) continue;
+      if (String(order.buyerId) === String(userId)) comoComprador += 1;
+      if (mias.has(String(order.storeId))) comoVendedor += 1;
+    }
+    return { comoComprador, comoVendedor };
+  }
+
+  async anonymize(input: {
+    userId: UserId;
+    email: string;
+    name: string;
+    changedAt: Date;
+  }): Promise<{ avatarUrl: string | null }> {
+    const id = String(input.userId);
+    const user = this.db.users.get(id);
+    if (!user) return { avatarUrl: null };
+
+    const avatarUrl = user.avatarUrl ?? null;
+
+    this.db.users.set(id, {
+      ...user,
+      name: input.name,
+      email: input.email,
+      phone: null,
+      avatarUrl: null,
+      bio: null,
+      status: 'deleted',
+      passwordChangedAt: input.changedAt,
+      updatedAt: input.changedAt,
+    });
+
+    this.db.credentials.delete(id);
+
+    for (const [clave, identidad] of this.db.userIdentities) {
+      if (String(identidad.userId) === id) this.db.userIdentities.delete(clave);
+    }
+    for (const [clave, token] of this.db.passwordResets) {
+      if (String(token.userId) === id) this.db.passwordResets.delete(clave);
+    }
+    for (const [clave, sub] of this.db.pushSubscriptions) {
+      if (String(sub.userId) === id) this.db.pushSubscriptions.delete(clave);
+    }
+    for (const [clave, follow] of this.db.follows) {
+      if (String(follow.userId) === id) this.db.follows.delete(clave);
+    }
+    for (const [clave, verificacion] of this.db.identityVerifications) {
+      if (String(verificacion.userId) === id) this.db.identityVerifications.delete(clave);
+    }
+
+    // Los mensajes del chat no se borran: hubo otras personas en esa
+    // conversacion. Se despersonalizan.
+    for (const [clave, mensaje] of this.db.liveMessages) {
+      if (String(mensaje.authorId ?? '') !== id) continue;
+      this.db.liveMessages.set(clave, {
+        ...mensaje,
+        authorName: input.name,
+        authorAvatarUrl: null,
+      });
+    }
+
+    // La tienda se pausa, no se borra: los pedidos historicos la referencian y
+    // quien compro tiene derecho a ver a quien le compro.
+    for (const [clave, store] of this.db.stores) {
+      if (String(store.ownerId) !== id) continue;
+      this.db.stores.set(clave, { ...store, status: 'paused' });
+    }
+
+    return { avatarUrl };
   }
 }

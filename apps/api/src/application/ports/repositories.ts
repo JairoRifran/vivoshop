@@ -59,6 +59,46 @@ export interface UserRepository {
 }
 
 /**
+ * Borrar una cuenta.
+ *
+ * Puerto propio y no metodos sueltos en `UserRepository` por una razon: el
+ * borrado toca **ocho tablas** y tiene que ser todo o nada. Una cuenta que
+ * quedo sin nombre pero con las notificaciones vivas, o sin identidades pero
+ * con el correo intacto, es peor que una que no se borro: nadie se entera de
+ * que quedo a medias.
+ *
+ * `anonymize` es una sola operacion en el adaptador, dentro de una
+ * transaccion. El servicio no orquesta pasos.
+ */
+export interface AccountDeletionRepository {
+  /**
+   * Cuantos pedidos sin cerrar tiene, de cada lado del mostrador.
+   *
+   * Los dos numeros en una sola llamada porque la decision es una sola y se
+   * toma con los dos: ver un lado y despues el otro deja una ventana en la que
+   * el segundo cambio.
+   */
+  countOrdersInFlight(userId: UserId): Promise<{ comoComprador: number; comoVendedor: number }>;
+
+  /**
+   * Anonimiza la cuenta y limpia todo lo que cuelga de ella, en una
+   * transaccion.
+   *
+   * Devuelve la clave de la foto de perfil que habia, si habia: el archivo en
+   * el almacenamiento no vive en la base y hay que borrarlo aparte. Se devuelve
+   * en vez de borrarse aca porque el almacenamiento no participa de la
+   * transaccion, y un fallo suyo no puede voltear el borrado de los datos.
+   */
+  anonymize(input: {
+    userId: UserId;
+    email: string;
+    name: string;
+    /** Fecha de corte de sesiones: la misma maquinaria que el cambio de contrasena. */
+    changedAt: Date;
+  }): Promise<{ avatarUrl: string | null }>;
+}
+
+/**
  * El `state` del ingreso social, en vuelo.
  *
  * Se emite antes de mandar a la persona al proveedor y se consume **una sola

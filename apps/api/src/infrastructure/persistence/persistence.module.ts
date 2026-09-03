@@ -24,6 +24,7 @@ import {
   USER_IDENTITY_REPOSITORY,
   LOGIN_STATE_REPOSITORY,
   PASSWORD_RESET_REPOSITORY,
+  ACCOUNT_DELETION_REPOSITORY,
 } from '../../application/ports/tokens';
 import { BID_REPOSITORY, BID_TRANSACTION_RUNNER } from '../../application/ports/bids';
 import {
@@ -69,6 +70,7 @@ import {
   DrizzleUserIdentityRepository,
   DrizzleLoginStateRepository,
   DrizzlePasswordResetRepository,
+  DrizzleAccountDeletionRepository,
 } from './drizzle/drizzle.repositories';
 import { AesGcmSecretBox, SECRET_BOX, loadEncryptionKeys } from '../crypto/secret-box';
 import { MemoryDatabase } from './memory/memory-database';
@@ -87,10 +89,12 @@ import {
   MemoryUserIdentityRepository,
   MemoryLoginStateRepository,
   MemoryPasswordResetRepository,
+  MemoryAccountDeletionRepository,
 } from './memory/memory.repositories';
 
 const REPOSITORY_TOKENS = [
   USER_REPOSITORY,
+  ACCOUNT_DELETION_REPOSITORY,
   USER_IDENTITY_REPOSITORY,
   LOGIN_STATE_REPOSITORY,
   PASSWORD_RESET_REPOSITORY,
@@ -130,6 +134,7 @@ const POOL = Symbol('PgPool');
     { provide: USER_IDENTITY_REPOSITORY, useClass: MemoryUserIdentityRepository },
     { provide: LOGIN_STATE_REPOSITORY, useClass: MemoryLoginStateRepository },
     { provide: PASSWORD_RESET_REPOSITORY, useClass: MemoryPasswordResetRepository },
+    { provide: ACCOUNT_DELETION_REPOSITORY, useClass: MemoryAccountDeletionRepository },
     { provide: STORE_REPOSITORY, useClass: MemoryStoreRepository },
     { provide: PRODUCT_REPOSITORY, useClass: MemoryProductRepository },
     { provide: LIVE_REPOSITORY, useClass: MemoryLiveRepository },
@@ -219,6 +224,7 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: USER_IDENTITY_REPOSITORY, useClass: DrizzleUserIdentityRepository },
     { provide: LOGIN_STATE_REPOSITORY, useClass: DrizzleLoginStateRepository },
     { provide: PASSWORD_RESET_REPOSITORY, useClass: DrizzlePasswordResetRepository },
+    { provide: ACCOUNT_DELETION_REPOSITORY, useClass: DrizzleAccountDeletionRepository },
     { provide: STORE_REPOSITORY, useClass: DrizzleStoreRepository },
     { provide: PRODUCT_REPOSITORY, useClass: DrizzleProductRepository },
     { provide: LIVE_REPOSITORY, useClass: DrizzleLiveRepository },

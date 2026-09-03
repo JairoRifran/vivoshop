@@ -177,3 +177,28 @@ export async function changePassword(
   await clearToken();
   redirect('/ingresar?motivo=contrasena');
 }
+
+/**
+ * Borra la cuenta.
+ *
+ * Termina igual que cambiar la contraseña —cookie borrada y redirección— y por
+ * el mismo motivo técnico: anonimizar fecha el corte de sesiones, así que el
+ * token que hizo la petición ya está muerto. Dejarlo en el navegador solo
+ * lograría que la siguiente pantalla diera 401.
+ */
+export async function deleteAccount(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const client = await api();
+    await client.request('POST', '/auth/account/delete', {
+      confirmation: text(form, 'confirmation'),
+    });
+  } catch (error) {
+    return failure(error);
+  }
+
+  await clearToken();
+  redirect('/?cuenta=eliminada');
+}

@@ -317,3 +317,15 @@ export const acceptBidRequestSchema = z.object({
   bidId: idSchema,
 });
 export type AcceptBidRequest = z.infer<typeof acceptBidRequestSchema>;
+
+/**
+ * Borrar la cuenta.
+ *
+ * La confirmación es el propio correo, escrito a mano. El servidor lo compara
+ * contra el correo de la sesión: acá solo se valida que haya algo y que no sea
+ * absurdamente largo.
+ */
+export const deleteAccountRequestSchema = z.object({
+  confirmation: z.string().min(1).max(320),
+});
+export type DeleteAccountRequest = z.infer<typeof deleteAccountRequestSchema>;

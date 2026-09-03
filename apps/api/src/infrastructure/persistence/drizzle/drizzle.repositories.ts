@@ -21,6 +21,7 @@ import type {
 import { asUserId } from '@vivo/domain';
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type {
+  AccountDeletionRepository,
   AnalyticsRepository,
   FollowRepository,
   LiveQuery,
@@ -886,5 +887,95 @@ export class DrizzlePasswordResetRepository implements PasswordResetRepository {
           isNull(t.passwordResetTokens.consumedAt),
         ),
       );
+  }
+}
+
+/**
+ * El borrado de cuenta, contra Postgres.
+ *
+ * Todo dentro de **una transaccion**. Es lo que separa un borrado de una cuenta
+ * a medio borrar: sin transaccion, un fallo de red en la sexta tabla deja a
+ * alguien sin identidades pero con el correo intacto, y nadie se entera.
+ *
+ * El archivo de la foto **no** se borra aca. El almacenamiento no participa de
+ * la transaccion, asi que su clave se devuelve y el servicio lo borra despues:
+ * si Supabase esta caido, los datos ya se fueron igual y lo que queda es un
+ * archivo huerfano, que es infinitamente mejor que una cuenta a medio anonimizar.
+ */
+@Injectable()
+export class DrizzleAccountDeletionRepository implements AccountDeletionRepository {
+  constructor(@Inject(DRIZZLE) private readonly db: VivoDatabase) {}
+
+  async countOrdersInFlight(
+    userId: UserId,
+  ): Promise<{ comoComprador: number; comoVendedor: number }> {
+    const terminales = ['completed', 'cancelled'];
+
+    // Una sola consulta con dos agregados: leer un lado y despues el otro deja
+    // una ventana en la que el segundo cambio.
+    const [row] = await this.db
+      .select({
+        comoComprador: sql<number>`count(*) filter (where ${t.orders.buyerId} = ${String(userId)})`,
+        comoVendedor: sql<number>`count(*) filter (where ${t.orders.storeId} in (select ${t.stores.id} from ${t.stores} where ${t.stores.ownerId} = ${String(userId)}))`,
+      })
+      .from(t.orders)
+      .where(sql`${t.orders.status} not in (${sql.join(terminales.map((e) => sql`${e}`), sql`, `)})`);
+
+    return {
+      comoComprador: Number(row?.comoComprador ?? 0),
+      comoVendedor: Number(row?.comoVendedor ?? 0),
+    };
+  }
+
+  async anonymize(input: {
+    userId: UserId;
+    email: string;
+    name: string;
+    changedAt: Date;
+  }): Promise<{ avatarUrl: string | null }> {
+    const id = String(input.userId);
+
+    return this.db.transaction(async (tx) => {
+      const [previo] = await tx
+        .select({ avatarUrl: t.users.avatarUrl })
+        .from(t.users)
+        .where(eq(t.users.id, id))
+        .limit(1);
+
+      await tx
+        .update(t.users)
+        .set({
+          name: input.name,
+          email: input.email,
+          phone: null,
+          avatarUrl: null,
+          bio: null,
+          passwordHash: null,
+          status: 'deleted',
+          // La misma fecha de corte que usa el cambio de contrasena (M08): con
+          // esto, toda sesion abierta muere en la siguiente peticion.
+          passwordChangedAt: input.changedAt,
+          updatedAt: input.changedAt,
+        })
+        .where(eq(t.users.id, id));
+
+      await tx.delete(t.userIdentities).where(eq(t.userIdentities.userId, id));
+      await tx.delete(t.passwordResetTokens).where(eq(t.passwordResetTokens.userId, id));
+      await tx.delete(t.pushSubscriptions).where(eq(t.pushSubscriptions.userId, id));
+      await tx.delete(t.follows).where(eq(t.follows.userId, id));
+      await tx.delete(t.identityVerifications).where(eq(t.identityVerifications.userId, id));
+
+      // Los mensajes no se borran: hubo otras personas en esa conversacion. Se
+      // despersonalizan.
+      await tx
+        .update(t.liveMessages)
+        .set({ authorName: input.name, authorAvatarUrl: null })
+        .where(eq(t.liveMessages.authorId, id));
+
+      // La tienda se pausa, no se borra: los pedidos historicos la referencian.
+      await tx.update(t.stores).set({ status: 'paused' }).where(eq(t.stores.ownerId, id));
+
+      return { avatarUrl: previo?.avatarUrl ?? null };
+    });
   }
 }

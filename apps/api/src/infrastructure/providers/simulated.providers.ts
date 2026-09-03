@@ -177,6 +177,17 @@ export class LocalStorageProvider implements StorageProvider {
     return `${this.base}/media/dev/file/${key}`;
   }
 
+  keyFromPublicUrl(url: string): string | null {
+    const prefijo = `${this.base}/media/dev/file/`;
+    if (!url.startsWith(prefijo)) return null;
+    const clave = url.slice(prefijo.length);
+    return clave.length > 0 ? clave : null;
+  }
+
+  async remove(key: string): Promise<void> {
+    this.files.delete(key);
+  }
+
   /** Guarda los bytes. Solo lo llama `MediaController`, y solo con este driver. */
   put(key: string, contentType: string, bytes: Buffer): void {
     this.files.set(key, { contentType, bytes });

@@ -100,7 +100,14 @@ export type DomainErrorCode =
   /** El enlace para restablecer vencio, ya se uso, o no existe. */
   | 'RESET_TOKEN_INVALID'
   /** El proveedor de correo refuso o esta inalcanzable. */
-  | 'EMAIL_UNAVAILABLE';
+  | 'EMAIL_UNAVAILABLE'
+  // --- Borrado de cuenta (M11) -------------------------------------------
+  /** La tienda de esta cuenta tiene ventas sin cerrar. */
+  | 'ACCOUNT_HAS_PENDING_SALES'
+  /** Esta cuenta tiene compras sin cerrar. */
+  | 'ACCOUNT_HAS_PENDING_ORDERS'
+  /** El texto de confirmación no coincide con el correo de la cuenta. */
+  | 'ACCOUNT_CONFIRMATION_MISMATCH';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;
