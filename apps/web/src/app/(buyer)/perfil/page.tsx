@@ -171,6 +171,10 @@ export default async function ProfilePage() {
           <Link href="/terminos" className="hover:text-ink">
             Términos
           </Link>
+          <span aria-hidden>·</span>
+          <Link href="/eliminar-cuenta" className="hover:text-ink">
+            Eliminar cuenta
+          </Link>
         </nav>
       </footer>
     </div>

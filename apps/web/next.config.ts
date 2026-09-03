@@ -42,6 +42,20 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@vivo/ui'],
   },
 
+  /*
+   * `/.well-known/assetlinks.json` lo tiene que servir el dominio raíz con ese
+   * nombre exacto: es donde Chrome lo busca y no acepta otro lugar.
+   *
+   * Va por reescritura y no como archivo en `public/`, por dos razones. La
+   * primera es que su contenido depende de la huella de la firma del APK, que
+   * no existe hasta que se genera la clave y sale de variables de entorno. La
+   * segunda es que las carpetas que empiezan con punto dentro de `public/` han
+   * dado problemas según la versión y el host; una ruta no depende de eso.
+   */
+  async rewrites() {
+    return [{ source: '/.well-known/assetlinks.json', destination: '/api/assetlinks' }];
+  },
+
   async headers() {
     return [
       {

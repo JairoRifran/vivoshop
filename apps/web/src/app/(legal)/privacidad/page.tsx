@@ -258,6 +258,10 @@ export default function PrivacidadPage() {
         Nombre, foto y descripción los podés cambiar vos mismo desde tu perfil, sin escribirnos.
       </p>
       <p>
+        Para borrar la cuenta entera, el procedimiento y el detalle de qué se borra y qué no están
+        en <Link href="/eliminar-cuenta">Eliminar tu cuenta</Link>.
+      </p>
+      <p>
         Si considerás que no te respondimos bien, podés reclamar ante la{' '}
         <strong>Unidad Reguladora y de Control de Datos Personales (URCDP)</strong>.
       </p>
