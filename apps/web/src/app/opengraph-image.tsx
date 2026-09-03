@@ -75,7 +75,7 @@ export default function OpenGraphImage() {
             color: '#b9b9c2',
           }}
         >
-          Comprá en vivo a tiendas uruguayas
+          Comprá y vendé en el vivo
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 44 }}>

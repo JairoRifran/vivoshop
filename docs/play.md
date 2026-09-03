@@ -66,42 +66,68 @@ código ni volver a desplegar el repositorio.**
 
 ## 4. Textos de la ficha
 
+### La posición: "ventas en vivo", no "tiendas"
+
+Los primeros textos decían *"tiendas uruguayas"*, y estaba mal apuntado.
+Describe comercios formales y deja afuera al público real de este producto: la
+persona que **ya vende transmitiendo** en una red social y anota los pedidos en
+los comentarios.
+
+Esa conducta tiene un nombre propio en la región —**ventas en vivo**— y es lo
+que la gente busca. Los textos apuntan a la conducta, no a un tipo de comercio,
+y dicen explícitamente que no hace falta tener local ni empresa.
+
+Los textos **no nombran a ninguna plataforma competidora**. Play desaconseja
+referenciar otras marcas, y además describir la conducta —"anotar pedidos en los
+comentarios"— pega más fuerte que nombrarla.
+
 ### Nombre de la app (máx. 30)
 
 ```
-VivoShop: comprá en vivo
+VivoShop: ventas en vivo
 ```
+
+24 caracteres. "Ventas en vivo" cubre las dos puntas: quien busca comprar y
+quien busca vender.
 
 ### Descripción breve (máx. 80)
 
 ```
-Mirá vivos de tiendas uruguayas y comprá sin salir de la transmisión.
+Comprá en el vivo. Y si vendés en vivo, cobrá sin anotar comentarios.
 ```
+
+69 caracteres.
 
 ### Descripción completa
 
 ```
-VivoShop es comercio en vivo hecho en Uruguay.
+VivoShop es la app de las ventas en vivo.
 
-Las tiendas transmiten desde el celular, muestran lo que tienen y responden en
-el momento. Vos mirás, preguntás en el chat y comprás sin salir del vivo.
+Si ya vendés transmitiendo --mostrando lo que tenés, respondiendo preguntas,
+anotando quién se lleva qué-- sabés cómo termina: una lista de comentarios,
+mensajes por privado para pasar el alias, y transferencias que hay que ir
+cruzando a mano.
 
-QUÉ PODÉS HACER
+Acá el vivo y el cobro son la misma cosa.
 
-• Mirar transmisiones en vivo de tiendas uruguayas.
-• Preguntar por talles, colores o envíos y que te contesten ahí mismo.
-• Comprar durante la transmisión, sin cambiar de aplicación.
-• Seguir a tus tiendas y recibir un aviso cuando salen en vivo.
-• Ver el estado de tus pedidos en un solo lugar.
+PARA QUIEN VENDE
 
-SI VENDÉS
+• Transmití desde el celular, sin equipo ni programa aparte.
+• Mostrá el producto y que se pueda comprar en ese mismo momento.
+• Cobrá con tu propia cuenta de Mercado Pago. La plata entra ahí.
+• Se acabó anotar pedidos en los comentarios: cada compra queda registrada.
+• No hace falta tener local ni empresa. Si vendés, podés vender acá.
+• Comisión del 3% sobre cada venta concretada. Nada más.
 
-• Creá tu tienda gratis y transmití desde el celular.
-• Mostrá tus productos durante el vivo y vendé en el momento.
-• Cobrá con tu propia cuenta de Mercado Pago.
-• Comisión del 3% sobre cada venta concretada.
+PARA QUIEN COMPRA
+
+• Mirá vivos y comprá sin salir de la transmisión.
+• Preguntá por talle, color o envío y que te contesten en el momento.
+• Seguí a quien te interesa y recibí un aviso cuando sale en vivo.
+• Mirá el estado de tus pedidos en un solo lugar.
 
 PAGOS
+
 Los cobros los procesa Mercado Pago. Los datos de tu tarjeta nunca pasan por
 los servidores de VivoShop.
 
@@ -111,6 +137,7 @@ cumplir. Lo que sí existe son devoluciones dentro de los plazos de Mercado Pago
 y reclamos con intervención nuestra.
 
 HECHO EN URUGUAY
+
 Precios en pesos, envíos dentro del país y atención en español.
 
 Política de privacidad: https://vivoshop.live/privacidad

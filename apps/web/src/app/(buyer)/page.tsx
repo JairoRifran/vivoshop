@@ -35,7 +35,7 @@ export default async function HomePage() {
     <div className="flex flex-col gap-8 pt-safe">
       <header className="flex items-center justify-between gap-3 px-4 pt-2">
         <div>
-          <p className="text-[13px] font-semibold text-subtle">Comercio en vivo · Uruguay</p>
+          <p className="text-[13px] font-semibold text-subtle">Ventas en vivo · Uruguay</p>
           <h1 className="text-[28px] leading-tight">
             <VivoWordmark markClassName="size-7" />
           </h1>

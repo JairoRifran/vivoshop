@@ -37,9 +37,9 @@ export default function TerminosPage() {
 
       <h2>1. Qué es VivoShop</h2>
       <p>
-        VivoShop es una plataforma donde tiendas uruguayas transmiten en vivo y venden durante la
-        transmisión. Es operada por <strong>Jairo Rifrán</strong>, con domicilio en Montevideo,
-        Uruguay.
+        VivoShop es una plataforma donde cualquier persona que venda —un comercio, un emprendimiento
+        o alguien que vende por su cuenta— transmite en vivo y vende durante la transmisión. Es
+        operada por <strong>Jairo Rifrán</strong>, con domicilio en Montevideo, Uruguay.
       </p>
       <p>
         <strong>VivoShop no vende nada.</strong> Somos el lugar donde se encuentran quien vende y

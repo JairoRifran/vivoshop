@@ -49,7 +49,7 @@ const destino = join(raiz, 'assets/play/capturas');
 
 /** Las pantallas que cuentan la historia del producto, en ese orden. */
 const PANTALLAS = [
-  { archivo: '1-inicio.png', ruta: '/', espera: 'Comercio en vivo' },
+  { archivo: '1-inicio.png', ruta: '/', espera: 'Ventas en vivo' },
   { archivo: '2-explorar.png', ruta: '/explorar', espera: 'Explorar' },
   { archivo: '3-tienda.png', ruta: '/tienda/jairo-store', espera: 'Productos' },
   { archivo: '4-ingresar.png', ruta: '/ingresar', espera: 'Ingresá a tu cuenta' },

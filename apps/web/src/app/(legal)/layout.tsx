@@ -53,7 +53,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
 
       <footer className="border-t border-line py-6 text-[13px] text-subtle">
         <p>
-          VivoShop · Comercio en vivo en Uruguay ·{' '}
+          VivoShop · Ventas en vivo en Uruguay ·{' '}
           <a
             href="mailto:hola@vivoshop.live"
             className="font-semibold text-brand underline underline-offset-2"

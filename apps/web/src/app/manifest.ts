@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: `${APP_NAME} — comprá en vivo`,
     short_name: APP_NAME,
     description:
-      'Mirá transmisiones en vivo de tiendas uruguayas y comprá sin salir del video.',
+      'Comprá en vivos de venta sin salir de la transmisión. Y si vendés en vivo, cobrá en el momento.',
     id: '/',
     start_url: '/',
     scope: '/',

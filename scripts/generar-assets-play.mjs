@@ -83,10 +83,10 @@ await png(
   'grafico-destacado-1024x500.png',
   `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500">
      <rect width="1024" height="500" fill="${INK}"/>
-     ${marcaEn(150, 250, 258)}
-     <text x="360" y="246" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="bold" fill="${BLANCO}" letter-spacing="-2">VivoShop</text>
-     <text x="363" y="300" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="${GRIS}">Comprá en vivo a tiendas uruguayas</text>
-     <circle cx="373" cy="344" r="7" fill="${VIVO}"/>
-     <text x="390" y="353" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${VIVO}" letter-spacing="3">EN VIVO</text>
+     ${marcaEn(150, 310, 258)}
+     <text x="420" y="246" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="bold" fill="${BLANCO}" letter-spacing="-2">VivoShop</text>
+     <text x="423" y="300" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="${GRIS}">Comprá y vendé en el vivo</text>
+     <circle cx="433" cy="344" r="7" fill="${VIVO}"/>
+     <text x="450" y="353" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="${VIVO}" letter-spacing="3">EN VIVO</text>
    </svg>`,
 );

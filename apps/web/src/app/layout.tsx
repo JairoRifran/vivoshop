@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: `%s · ${APP_NAME}`,
   },
   description:
-    'Mirá transmisiones en vivo de tiendas uruguayas, preguntá en el chat y comprá sin salir del video.',
+    'Mirá vivos de venta y comprá en el momento, sin anotar nada en los comentarios. Si vendés en vivo, cobrás en el mismo vivo.',
   applicationName: APP_NAME,
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: APP_NAME },
   formatDetection: { telephone: false },
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     locale: 'es_UY',
     siteName: APP_NAME,
     title: `${APP_NAME} — comprá en vivo`,
-    description: 'Live commerce hecho en Uruguay.',
+    description: 'Ventas en vivo, hechas en Uruguay.',
   },
 };
 
