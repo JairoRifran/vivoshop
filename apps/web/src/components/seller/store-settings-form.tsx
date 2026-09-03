@@ -89,7 +89,17 @@ export function StoreSettingsForm({ store }: { store: StoreDetailDto }) {
           { value: 'active', label: 'Abierta' },
           { value: 'paused', label: 'Pausada' },
         ]}
-        hint="Pausada: la tienda se ve pero no recibe pedidos."
+        /*
+         * Las tres consecuencias de pausar, y las tres están en el código:
+         * sale del listado (`StoreRepository.list` filtra `status = 'active'`),
+         * sigue abriendo por enlace directo (`findBySlug` no filtra), y rechaza
+         * pedidos (`assertStoreCanSell`).
+         *
+         * Decía "la tienda se ve pero no recibe pedidos", que era la mitad al
+         * revés: desaparece de Explorar. Quien pausaba para dejar de vender un
+         * rato no tenía forma de saber que además se estaba sacando de la vista.
+         */
+        hint="Pausada: sale del listado y no recibe pedidos. Quien tenga el enlace directo igual puede abrirla."
       />
 
       <Button type="submit" block loading={pending}>
