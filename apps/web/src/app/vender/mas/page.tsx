@@ -70,9 +70,19 @@ export default async function SellerMorePage() {
       <section className="flex flex-col gap-2 px-4 pb-2">
         <h2 className="text-[17px] font-extrabold tracking-tight">Próximamente</h2>
         <ul className="flex flex-col divide-y divide-line rounded-3xl bg-surface px-4 shadow-card">
-          <Upcoming label="Etiquetas de envío" note="M04" />
-          <Upcoming label="Notificaciones push" note="M04" />
-          <Upcoming label="Modo puja en vivo" note="M04" />
+          {/*
+            Acá decía además "Notificaciones push" y "Modo puja en vivo", y las
+            dos ya están hechas: push en M05 —`NotificationService` y el flujo
+            de suscripción— y las pujas en M04, con `BidService` y pruebas de
+            punta a punta que corren en cada commit.
+
+            Una lista de "próximamente" que promete lo que el producto ya hace
+            es peor que no tenerla: al vendedor que la lee le dice que le falta
+            algo que en realidad tiene, y deja de buscarlo.
+
+            Si se agrega algo acá, se saca el día que se entrega.
+          */}
+          <Upcoming label="Etiquetas de envío" />
         </ul>
 
         <Link
@@ -121,11 +131,19 @@ function Entry({ href, label, note }: { href: string; label: string; note: strin
   );
 }
 
-function Upcoming({ label, note }: { label: string; note: string }) {
+/**
+ * Una fila de "próximamente".
+ *
+ * `note` es opcional a propósito. Antes era obligatoria y las tres filas
+ * llevaban un badge que decía "M04": el código de un hito interno, que a quien
+ * vende no le significa nada. Un badge solo vale la pena si dice algo que la
+ * persona pueda usar —una fecha, un estado—; si no, es ruido con forma de dato.
+ */
+function Upcoming({ label, note }: { label: string; note?: string }) {
   return (
     <li className="flex items-center justify-between gap-3 py-3.5">
       <span className="text-[14px] text-ink-soft">{label}</span>
-      <Badge tone="neutral">{note}</Badge>
+      {note ? <Badge tone="neutral">{note}</Badge> : null}
     </li>
   );
 }
