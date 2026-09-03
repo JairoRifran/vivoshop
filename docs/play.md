@@ -252,6 +252,33 @@ entre usuarios. Las Condiciones del Servicio ya piden 18 años.
    una actualización de esa app nunca más.
 5. **Subir**, completar la ficha con los textos de §4 y el formulario de §5.
 
+## 8.5. La cuenta de demostración para la revisión
+
+Google **exige** una cuenta activa con credenciales para poder entrar a la app y
+revisarla. Va en la ficha, sección **App access → All or some functionality is
+restricted**.
+
+Creada en **producción** el 3 de septiembre de 2026, por el flujo de registro
+real (`POST /auth/register`), no inyectada en la base:
+
+```
+Email:       demo@vivoshop.live
+Contraseña:  VivoDemo2026!
+Rol:         buyer
+```
+
+Verificada de punta a punta: `POST /auth/login` → 200, `GET /auth/me` → 200. Es
+el correo de nuestro propio dominio, así que se distingue de un usuario real de
+un vistazo, y **no necesita buzón** —el ingreso no manda correo de confirmación—,
+aunque `hola@` sí existe si alguna vez hiciera falta recuperar la contraseña.
+
+**No se le fabricaron pedidos pagados.** Meter registros de compra falsos en la
+base de producción —con la contabilidad y Mercado Pago detrás— es exactamente lo
+que este proyecto evita desde M03. El revisor entra, ve el catálogo y las tiendas
+reales que ya existen, y navega; con eso alcanza. Si Google pidiera ver el
+recorrido de compra completo, se le arma un pedido de prueba en ese momento y se
+cancela después, en vez de dejar basura permanente.
+
 ## 9. Después de publicar
 
 - Cargar `ANDROID_PACKAGE_NAME` y `ANDROID_SHA256_FINGERPRINT` en Vercel.
@@ -260,9 +287,8 @@ entre usuarios. Las Condiciones del Servicio ya piden 18 años.
 
 ## 10. Deuda que Play vuelve más urgente
 
-- **Borrar la cuenta desde la aplicación.** Hoy `/eliminar-cuenta` explica un
-  procedimiento manual por correo. Cumple el requisito de Play —que pide una URL
-  pública— pero Google prefiere el borrado dentro de la app, y la Política de
-  Privacidad promete un derecho que hoy se ejerce escribiendo un mail.
-- **Contenido real** antes de sacar las capturas (§6).
-- **La tienda duplicada** de prueba, que ensucia cualquier captura.
+- **Contenido real** antes de sacar las capturas (§6): la de inicio abre con
+  "Nadie está transmitiendo", los productos son degradados de relleno, y hay una
+  tienda de prueba duplicada.
+- **El logo de la pantalla de consentimiento de Google** sigue sin subirse, para
+  no disparar una revisión que limite a 100 usuarios.
