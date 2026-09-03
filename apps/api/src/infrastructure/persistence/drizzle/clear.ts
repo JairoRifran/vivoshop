@@ -72,10 +72,27 @@ async function main(): Promise<void> {
   const env = loadEnv();
   if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required to clear.');
 
-  // Sin red de seguridad por NODE_ENV, al revés que el seed: vaciar una base de
-  // producción es justamente para lo que se escribió esto. Lo que sí hace es
-  // decir en voz alta contra qué servidor va a correr.
   const host = hostOf(env.DATABASE_URL);
+
+  // La red de seguridad: hay que tipear el host exacto en CONFIRM_HOST.
+  //
+  // Esto borra TODO y no se deshace. Un `pnpm db:clear` de más --el comando de
+  // arriba en el historial de la terminal, un script mal apuntado-- se lleva la
+  // base entera. La confirmación no es un "¿estás seguro?" que se contesta sin
+  // mirar: pide el nombre del servidor, así que para pasarla hay que haber visto
+  // contra cuál se está corriendo. Y sirve igual en un script, que es donde un
+  // "sí" automático sería más peligroso.
+  const confirm = process.env.CONFIRM_HOST;
+  if (confirm !== host) {
+    console.error(
+      `\nEsto BORRA TODA la base en ${host} y no se puede deshacer.\n\n` +
+        `Para confirmar, corré de nuevo con el host exacto:\n` +
+        `  CONFIRM_HOST=${host} pnpm db:clear\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`\nVaciando la base en ${host}\n`);
 
   const { db, pool } = createDatabase(env.DATABASE_URL, {
