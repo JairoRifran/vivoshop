@@ -4,33 +4,66 @@ import { createDatabase, type VivoDatabase } from './client';
 import { schema as t } from './schema';
 
 /**
- * Vacía la base de datos. Deja el esquema y las migraciones intactos.
+ * Vacía la base de datos entera. Deja el esquema y las migraciones intactos.
  *
  * Existe por una razón concreta: los datos de demostración son excelentes para
  * mostrar el producto y pésimos en una URL pública. Traen cuentas con
  * contraseña `vivo1234`, una de ellas vendedora, que cualquiera que lea el
  * repositorio puede usar.
  *
- * Es la contraparte de `db:seed`, y borra exactamente las mismas tablas en el
- * mismo orden — hijos antes que padres — para que no haya forma de que una se
- * actualice y la otra no.
- *
  * Después de esto la aplicación arranca vacía, que es como arranca de verdad:
  * la primera tienda es la primera persona que se registra.
+ *
+ * ## Por qué borra TODO, y no solo lo que siembra el seed
+ *
+ * La primera versión de esto borraba las mismas doce tablas que llena `db:seed`.
+ * Alcanzaba mientras la base solo tenía datos de demostración. Pero una
+ * producción de verdad acumula cosas que el seed nunca crea —cobros reales,
+ * cuentas de cobro conectadas, pujas, disputas, verificaciones— y varias de
+ * esas referencian a `users` y `stores` con `onDelete: 'restrict'`. Con la lista
+ * corta, `delete(stores)` y `delete(users)` chocaban contra esas filas y la
+ * transacción entera se revertía: la base quedaba igual que antes.
+ *
+ * ## El orden
+ *
+ * Estricto de hijos a padres. Las únicas que **obligan** un orden son las de
+ * `restrict` —`orders`, `payments`, `bid_sessions`, `bids`, `disputes`, todas
+ * hacia `users`/`stores`—: hay que vaciarlas antes de tocar a sus padres. El
+ * resto es `cascade` o `set null` y se borraría solo, pero se lista explícito
+ * igual: una tabla nueva que nadie agregue acá se nota como una fila que
+ * sobrevive a un borrado que dijo haber vaciado todo.
  */
 export async function clearDatabase(db: VivoDatabase): Promise<void> {
   await db.transaction(async (tx) => {
+    // --- Hojas: lo que cuelga de pedidos, pagos, pujas y vivos --------------
+    await tx.delete(t.disputes);
+    await tx.delete(t.bids);
+    await tx.delete(t.bidSessions);
+    await tx.delete(t.paymentWebhookEvents);
+    await tx.delete(t.payments);
+    await tx.delete(t.pushDeliveries);
+    await tx.delete(t.pushSubscriptions);
+    await tx.delete(t.oauthStates);
+    await tx.delete(t.identityVerifications);
+    await tx.delete(t.businessVerifications);
+    await tx.delete(t.sellerPaymentAccounts);
     await tx.delete(t.analyticsEvents);
     await tx.delete(t.idempotencyKeys);
-    await tx.delete(t.orderItems);
-    await tx.delete(t.orders);
-    await tx.delete(t.liveMessages);
-    await tx.delete(t.liveSessionProducts);
-    await tx.delete(t.liveSessions);
     await tx.delete(t.follows);
+    await tx.delete(t.orderItems);
+    await tx.delete(t.liveSessionProducts);
+    await tx.delete(t.liveMessages);
+    // --- Pedidos: el último `restrict` antes de tiendas y usuarios ----------
+    await tx.delete(t.orders);
+    // --- Catálogo y vivos ---------------------------------------------------
+    await tx.delete(t.liveSessions);
     await tx.delete(t.productVariants);
     await tx.delete(t.products);
     await tx.delete(t.stores);
+    // --- Identidad: lo que cuelga de la cuenta, y la cuenta ------------------
+    await tx.delete(t.loginStates);
+    await tx.delete(t.userIdentities);
+    await tx.delete(t.passwordResetTokens);
     await tx.delete(t.users);
   });
 }
