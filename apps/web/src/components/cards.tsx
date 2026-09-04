@@ -161,12 +161,24 @@ export function ProductCard({
   product,
   href,
   className,
+  showSaving = false,
 }: {
   product: ProductSummaryDto;
   href?: string;
   className?: string;
+  /**
+   * Agrega cuánto se ahorra en plata, no solo el porcentaje.
+   *
+   * Se usa en la sección de ofertas y en ningún otro lado. "-33%" es una
+   * proporción y hay que traducirla; "Ahorrás $500" es la cifra que la persona
+   * ya tenía en la cabeza. Es lo único que distingue una tarjeta de oferta de
+   * una normal, así que es una prop y no un componente aparte: duplicar la
+   * tarjeta entera para agregarle una línea es el error que M09 vino a limpiar.
+   */
+  showSaving?: boolean;
 }) {
   const soldOut = product.stock <= 0;
+  const saving = product.compareAtPriceMinor ? product.compareAtPriceMinor - product.priceMinor : 0;
 
   return (
     <Link
@@ -195,7 +207,14 @@ export function ProductCard({
       </div>
 
       <div className="flex flex-col gap-0.5">
-        <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{product.title}</p>
+        {/* `line-clamp-2` corta a dos líneas pero no las reserva, así que un
+            título de una línea subía el precio y lo dejaba desalineado con el
+            de la tarjeta de al lado. `min-h-10` son las dos líneas de 14px con
+            `leading-snug`: los precios quedan a la misma altura en la fila y en
+            la grilla. */}
+        <p className="line-clamp-2 min-h-10 text-[14px] font-semibold leading-snug">
+          {product.title}
+        </p>
         <div className="flex items-baseline gap-2">
           <span className="text-[15px] font-extrabold">
             {money(product.priceMinor, product.currency)}
@@ -206,7 +225,13 @@ export function ProductCard({
             </span>
           ) : null}
         </div>
-        <span className="truncate text-xs text-subtle">{product.storeName}</span>
+        {showSaving && saving > 0 ? (
+          <span className="text-xs font-bold text-brand">
+            Ahorrás {money(saving, product.currency)}
+          </span>
+        ) : (
+          <span className="truncate text-xs text-subtle">{product.storeName}</span>
+        )}
       </div>
     </Link>
   );
