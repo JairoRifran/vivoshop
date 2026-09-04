@@ -3,7 +3,8 @@
 Todo lo que se puede adelantar sin tener la cuenta de Play Console, junto con lo
 que solo puede hacer el titular.
 
-Estado: **preparado, sin publicar.**
+Estado: **app creada, paquete firmado y publicado en prueba interna. Falta la
+ficha (capturas) para enviar a revisión.**
 
 ---
 
@@ -19,14 +20,14 @@ cualquier cambio del sitio llega a la app publicada sin pasar por una revisión.
 
 ### La PWA ya cumple los requisitos
 
-| Requisito | Estado |
-| --- | --- |
-| `display: standalone` | ✅ |
-| Íconos 192 y 512 | ✅ |
-| Ícono `maskable` | ✅ |
-| Service worker | ✅ `/sw.js` responde 200 |
-| HTTPS | ✅ |
-| `start_url` válida | ✅ `/` |
+| Requisito             | Estado                   |
+| --------------------- | ------------------------ |
+| `display: standalone` | ✅                       |
+| Íconos 192 y 512      | ✅                       |
+| Ícono `maskable`      | ✅                       |
+| Service worker        | ✅ `/sw.js` responde 200 |
+| HTTPS                 | ✅                       |
+| `start_url` válida    | ✅ `/`                   |
 
 ## 2. Los cobros siguen en Mercado Pago, y eso está permitido
 
@@ -46,29 +47,48 @@ Es lo que permite que la app abra **sin la barra del navegador arriba**. Sin
 este archivo la app funciona igual, pero muestra la URL y deja de parecer una
 aplicación.
 
-Ya está implementado como ruta, en `apps/web/src/app/api/assetlinks/route.ts`,
-con una reescritura desde `/.well-known/assetlinks.json`. Devuelve **404 a
-propósito** hasta que existan dos variables de entorno:
+Implementado como ruta en `apps/web/src/app/api/assetlinks/route.ts`, con una
+reescritura desde `/.well-known/assetlinks.json`.
+
+**Resuelto el 4 de septiembre de 2026.** Devuelve 200 y la app instalada desde
+Play abre sin barra del navegador — verificado en un teléfono real.
 
 ```
-ANDROID_PACKAGE_NAME        p. ej. live.vivoshop.app
-ANDROID_SHA256_FINGERPRINT  la huella SHA-256 del certificado de firma
+ANDROID_PACKAGE_NAME        live.vivoshop.app
+ANDROID_SHA256_FINGERPRINT  17:5B:5C:48:FD:F2:31:89:44:8D:5F:F1:8B:07:2A:FE:
+                            F1:62:80:86:85:B7:F3:16:4B:6A:3D:E7:F2:A8:15:05
 ```
 
-Se cargan en Vercel y la ruta empieza a responder sola. **No hace falta tocar
-código ni volver a desplegar el repositorio.**
+Cargadas en Vercel como **Config**, no como Secret: ninguna de las dos es
+secreta —la huella se publica para que Chrome la lea— y marcarlas como secreto
+las volvería ilegibles sin ganar nada. **Sí hace falta un redespliegue en
+Vercel**: las variables se inyectan al desplegar, no en caliente.
 
-> **El error clásico de este archivo.** Si se publica con *Play App Signing*
-> —lo habitual y lo recomendado—, la huella que vale es la del certificado que
-> **genera Google**, no la del almacén local. Está en Play Console → Configuración
-> → Integridad de la app. Poner la del almacén local hace que la barra del
-> navegador siga apareciendo, sin ningún mensaje de error que lo explique.
+> **El error clásico de este archivo, confirmado en la práctica.** Play muestra
+> **dos** huellas y hay que usar la correcta:
+>
+> | En Play Console                  | Huella         | ¿Sirve? |
+> | -------------------------------- | -------------- | ------- |
+> | _Certificado de clave de subida_ | `50:D1:3D:93…` | ❌      |
+> | _Digital Asset Links JSON_       | `17:5B:5C:48…` | ✅      |
+>
+> La de subida es la del almacén local que genera PWABuilder — y el zip trae un
+> `assetlinks.json` ya armado **con esa huella**, que es justo la trampa. La que
+> vale es la del certificado que genera Google, y Play la entrega dentro de un
+> fragmento JSON listo para copiar.
+>
+> Ojo con la ruta: la sección **ya no está** en _Configuración → Integridad de la
+> app_. Google la movió a **Firma de aplicaciones** (`/keymanagement`).
+>
+> Corolario práctico: el APK del zip **nunca** va a abrir sin barra, porque está
+> firmado con la clave local. Para probarlo hay que instalar desde Play, que es
+> quien firma con la clave buena.
 
 ## 4. Textos de la ficha
 
 ### La posición: "ventas en vivo", no "tiendas"
 
-Los primeros textos decían *"tiendas uruguayas"*, y estaba mal apuntado.
+Los primeros textos decían _"tiendas uruguayas"_, y estaba mal apuntado.
 Describe comercios formales y deja afuera al público real de este producto: la
 persona que **ya vende transmitiendo** en una red social y anota los pedidos en
 los comentarios.
@@ -151,11 +171,11 @@ la app**. Estas respuestas salen del inventario de `docs/m10.md` §3.
 
 ### Preguntas generales
 
-| Pregunta | Respuesta |
-| --- | --- |
-| ¿Los datos se cifran en tránsito? | **Sí** — todo va por HTTPS |
-| ¿Se puede pedir la eliminación de los datos? | **Sí** |
-| URL de eliminación de cuenta | `https://vivoshop.live/eliminar-cuenta` |
+| Pregunta                                     | Respuesta                               |
+| -------------------------------------------- | --------------------------------------- |
+| ¿Los datos se cifran en tránsito?            | **Sí** — todo va por HTTPS              |
+| ¿Se puede pedir la eliminación de los datos? | **Sí**                                  |
+| URL de eliminación de cuenta                 | `https://vivoshop.live/eliminar-cuenta` |
 
 ### Qué se recolecta
 
@@ -164,18 +184,18 @@ organización**. Los proveedores que procesan por cuenta nuestra —Supabase,
 Railway, Resend— no cuentan. **El vendedor sí**: es otro comerciante y recibe
 tus datos de entrega.
 
-| Tipo de dato | Se recolecta | Se comparte | Obligatorio | Para qué |
-| --- | :---: | :---: | --- | --- |
-| Nombre | Sí | **Sí** (al vendedor) | Sí | Función de la app, gestión de la cuenta |
-| Correo electrónico | Sí | No | Sí | Función de la app, gestión de la cuenta |
-| Número de teléfono | Sí | **Sí** (al vendedor) | Opcional | Coordinar la entrega |
-| Dirección física | Sí | **Sí** (al vendedor) | Opcional | Envío del pedido |
-| ID de usuario | Sí | No | Sí | Función de la app |
-| Historial de compras | Sí | **Sí** (al vendedor) | Sí | Función de la app |
-| Fotos | Sí | No | Opcional | Foto de perfil y de tienda |
-| Mensajes en la app | Sí | No | Opcional | El chat del vivo |
-| Interacciones con la app | Sí | No | Opcional | Analítica propia |
-| Otros identificadores | Sí | No | Opcional | Enviar avisos al dispositivo |
+| Tipo de dato             | Se recolecta |     Se comparte      | Obligatorio | Para qué                                |
+| ------------------------ | :----------: | :------------------: | ----------- | --------------------------------------- |
+| Nombre                   |      Sí      | **Sí** (al vendedor) | Sí          | Función de la app, gestión de la cuenta |
+| Correo electrónico       |      Sí      |          No          | Sí          | Función de la app, gestión de la cuenta |
+| Número de teléfono       |      Sí      | **Sí** (al vendedor) | Opcional    | Coordinar la entrega                    |
+| Dirección física         |      Sí      | **Sí** (al vendedor) | Opcional    | Envío del pedido                        |
+| ID de usuario            |      Sí      |          No          | Sí          | Función de la app                       |
+| Historial de compras     |      Sí      | **Sí** (al vendedor) | Sí          | Función de la app                       |
+| Fotos                    |      Sí      |          No          | Opcional    | Foto de perfil y de tienda              |
+| Mensajes en la app       |      Sí      |          No          | Opcional    | El chat del vivo                        |
+| Interacciones con la app |      Sí      |          No          | Opcional    | Analítica propia                        |
+| Otros identificadores    |      Sí      |          No          | Opcional    | Enviar avisos al dispositivo            |
 
 ### Qué NO se recolecta, y conviene declararlo así
 
@@ -196,11 +216,11 @@ antes de publicar la versión: declarar de menos es lo que Play sanciona.
 
 Generados y versionados en `assets/play/`:
 
-| Archivo | Medida | Notas |
-| --- | --- | --- |
-| `icono-tienda-512.png` | 512×512 | A sangre, sin esquinas redondeadas: Play pone su propia máscara |
-| `grafico-destacado-1024x500.png` | 1024×500 | Sin transparencia, contenido centrado porque Play lo recorta |
-| `capturas/*.png` | 1170×2532 | Cuatro, a 3× de densidad |
+| Archivo                          | Medida    | Notas                                                           |
+| -------------------------------- | --------- | --------------------------------------------------------------- |
+| `icono-tienda-512.png`           | 512×512   | A sangre, sin esquinas redondeadas: Play pone su propia máscara |
+| `grafico-destacado-1024x500.png` | 1024×500  | Sin transparencia, contenido centrado porque Play lo recorta    |
+| `capturas/*.png`                 | 1170×2532 | Cuatro, a 3× de densidad                                        |
 
 Se regeneran con:
 
@@ -279,11 +299,23 @@ reales que ya existen, y navega; con eso alcanza. Si Google pidiera ver el
 recorrido de compra completo, se le arma un pedido de prueba en ese momento y se
 cancela después, en vez de dejar basura permanente.
 
-## 9. Después de publicar
+## 9. Lo hecho y lo que falta
 
-- Cargar `ANDROID_PACKAGE_NAME` y `ANDROID_SHA256_FINGERPRINT` en Vercel.
-- Comprobar que `https://vivoshop.live/.well-known/assetlinks.json` devuelva 200.
-- Abrir la app instalada y verificar que **no** aparezca la barra del navegador.
+Hecho el 4 de septiembre de 2026:
+
+- Cuenta de desarrollador verificada (identidad y teléfono).
+- App creada: `live.vivoshop.app`, es-419, gratuita.
+- Ficha con textos, ícono y gráfico destacado.
+- **Las diez declaraciones de contenido**, incluida Seguridad de los datos con
+  13 tipos de dato y la clasificación IARC (12+).
+- Paquete firmado con PWABuilder y publicado en **prueba interna**.
+- `assetlinks.json` en 200 y **verificado en un teléfono: sin barra**.
+
+Falta:
+
+- **Capturas de pantalla** — el único bloqueo, y depende de tener contenido real.
+- Prueba cerrada con testers, que Google exige antes de habilitar producción.
+- Enviar la ficha a revisión.
 
 ## 10. Deuda que Play vuelve más urgente
 
