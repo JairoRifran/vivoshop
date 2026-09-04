@@ -27,6 +27,7 @@ import {
   ACCOUNT_DELETION_REPOSITORY,
 } from '../../application/ports/tokens';
 import { BID_REPOSITORY, BID_TRANSACTION_RUNNER } from '../../application/ports/bids';
+import { METRICS_REPOSITORY } from '../../application/ports/metrics';
 import {
   DISPUTE_REPOSITORY,
   OAUTH_STATE_REPOSITORY,
@@ -39,7 +40,9 @@ import { PasswordService } from '../security/password.service';
 import { DRIZZLE, createDatabase } from './drizzle/client';
 import { DrizzleOrderTransactionRunner } from './drizzle/drizzle.order-transaction';
 import { DrizzleBidRepository, DrizzleBidTransactionRunner } from './drizzle/drizzle.bids';
+import { DrizzleMetricsRepository } from './drizzle/drizzle.metrics';
 import { MemoryBidRepository, MemoryBidTransactionRunner } from './memory/memory.bids';
+import { MemoryMetricsRepository } from './memory/memory.metrics';
 import {
   DrizzleDisputeRepository,
   DrizzleOAuthStateRepository,
@@ -116,6 +119,7 @@ const REPOSITORY_TOKENS = [
   PAYMENT_TRANSACTION_RUNNER,
   BID_REPOSITORY,
   BID_TRANSACTION_RUNNER,
+  METRICS_REPOSITORY,
 ];
 
 const POOL = Symbol('PgPool');
@@ -156,6 +160,7 @@ const POOL = Symbol('PgPool');
     { provide: PAYMENT_TRANSACTION_RUNNER, useClass: MemoryPaymentTransactionRunner },
     { provide: BID_REPOSITORY, useClass: MemoryBidRepository },
     { provide: BID_TRANSACTION_RUNNER, useClass: MemoryBidTransactionRunner },
+    { provide: METRICS_REPOSITORY, useClass: MemoryMetricsRepository },
   ],
   exports: [...REPOSITORY_TOKENS, MemoryDatabase],
 })
@@ -165,6 +170,7 @@ export class MemoryPersistenceModule implements OnModuleInit {
   constructor(
     private readonly db: MemoryDatabase,
     private readonly passwords: PasswordService,
+    @Inject(ENV) private readonly env: AppEnv,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -173,6 +179,34 @@ export class MemoryPersistenceModule implements OnModuleInit {
       `Driver memory: ${this.db.stores.size} tiendas, ${this.db.products.size} productos, ` +
         `${this.db.liveSessions.size} transmisiones.`,
     );
+    this.otorgarAdminDeDesarrollo();
+  }
+
+  /**
+   * `DEV_ADMIN_EMAIL` para poder abrir `/admin` en desarrollo.
+   *
+   * `pnpm db:grant-admin` escribe en PostgreSQL, y el desarrollo corre sobre
+   * este driver, que se rearma entero en cada arranque: sin esto no hay forma
+   * de entrar al panel local.
+   *
+   * Vive acá y en ningún otro lado a propósito. Este método solo existe dentro
+   * del driver en memoria, así que contra una base de verdad ni siquiera se
+   * ejecuta; `loadEnv` además rechaza la variable si `NODE_ENV=production` o si
+   * el driver es `postgres`. Y avisa por consola cada vez: un permiso repartido
+   * en silencio es el que después nadie recuerda haber dado.
+   */
+  private otorgarAdminDeDesarrollo(): void {
+    const email = this.env.DEV_ADMIN_EMAIL?.toLowerCase();
+    if (!email) return;
+
+    for (const [clave, usuario] of this.db.users) {
+      if (usuario.email.toLowerCase() !== email) continue;
+      if (usuario.roles.includes('admin')) return;
+      this.db.users.set(clave, { ...usuario, roles: [...usuario.roles, 'admin'] });
+      this.logger.warn(`DEV_ADMIN_EMAIL: ${usuario.email} tiene rol admin en esta sesión.`);
+      return;
+    }
+    this.logger.warn(`DEV_ADMIN_EMAIL: no hay ninguna cuenta sembrada con ${email}.`);
   }
 }
 
@@ -246,6 +280,7 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: PAYMENT_TRANSACTION_RUNNER, useClass: DrizzlePaymentTransactionRunner },
     { provide: BID_REPOSITORY, useClass: DrizzleBidRepository },
     { provide: BID_TRANSACTION_RUNNER, useClass: DrizzleBidTransactionRunner },
+    { provide: METRICS_REPOSITORY, useClass: DrizzleMetricsRepository },
   ],
   exports: [...REPOSITORY_TOKENS, DRIZZLE],
 })
@@ -273,7 +308,8 @@ export class PostgresPersistenceModule implements OnModuleInit, OnApplicationShu
 export class PersistenceModule {
   static register(): DynamicModule {
     const env = loadEnv();
-    const driver = env.DATA_DRIVER === 'postgres' ? PostgresPersistenceModule : MemoryPersistenceModule;
+    const driver =
+      env.DATA_DRIVER === 'postgres' ? PostgresPersistenceModule : MemoryPersistenceModule;
 
     return {
       module: PersistenceModule,

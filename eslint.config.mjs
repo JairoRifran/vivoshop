@@ -91,7 +91,9 @@ export default tseslint.config(
 
   // Database CLI scripts report progress to a terminal.
   {
-    files: ['apps/api/src/infrastructure/persistence/drizzle/{seed,migrate,smoke}.ts'],
+    files: [
+      'apps/api/src/infrastructure/persistence/drizzle/{seed,migrate,smoke,clear,grant-admin}.ts',
+    ],
     rules: {
       'no-console': 'off',
     },

@@ -93,9 +93,19 @@ export class JwtAuthGuard implements CanActivate {
     request.user = user;
 
     if (requiredRoles.length > 0 && !requiredRoles.some((role) => user.roles.includes(role))) {
+      /*
+       * El mensaje depende del rol que falta.
+       *
+       * Estaba fijo en "Activá el modo vendedor", que era cierto mientras
+       * `seller` fuera el único rol que alguien podía pedir. Con `admin` deja
+       * de serlo: a quien toca una ruta del panel del dueño le diría que
+       * active un modo que no tiene nada que ver, y se pondría a buscarlo.
+       */
       throw new ForbiddenException({
         code: 'FORBIDDEN',
-        message: 'Activá el modo vendedor para acceder a esta sección.',
+        message: requiredRoles.includes('admin')
+          ? 'Esta sección es solo para la administración de VivoShop.'
+          : 'Activá el modo vendedor para acceder a esta sección.',
       });
     }
 

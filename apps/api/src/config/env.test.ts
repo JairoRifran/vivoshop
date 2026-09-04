@@ -139,9 +139,7 @@ describe('la clave de cifrado', () => {
   });
 
   it('una clave mal formada se rechaza con un mensaje que dice cómo generarla', () => {
-    expect(() => loadEnv({ ...PRODUCTION, ENCRYPTION_KEY: 'demasiado-corta' })).toThrow(
-      /32 bytes/,
-    );
+    expect(() => loadEnv({ ...PRODUCTION, ENCRYPTION_KEY: 'demasiado-corta' })).toThrow(/32 bytes/);
   });
 });
 
@@ -183,9 +181,7 @@ describe('con qué se puede ingresar', () => {
   });
 
   it('google sin credenciales no arranca', () => {
-    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'google' })).toThrow(
-      /GOOGLE_CLIENT_ID/,
-    );
+    expect(() => loadEnv({ ...PRODUCTION, OAUTH_PROVIDERS: 'google' })).toThrow(/GOOGLE_CLIENT_ID/);
   });
 
   it('google con credenciales arranca', () => {
@@ -233,5 +229,37 @@ describe('cómo se manda el correo', () => {
     });
 
     expect(env.EMAIL_PROVIDER).toBe('resend');
+  });
+});
+
+describe('el atajo de administrador en desarrollo', () => {
+  it('se acepta en desarrollo sobre el driver en memoria', () => {
+    const env = loadEnv({ ...BASE, DEV_ADMIN_EMAIL: 'ana@vivo.uy' });
+    expect(env.DEV_ADMIN_EMAIL).toBe('ana@vivo.uy');
+  });
+
+  it('el proceso no arranca si quedó puesta en producción', () => {
+    // Es una segunda vía de privilegio. Que reviente al arrancar es la única
+    // forma de que nadie la deje puesta sin querer en un deploy: si solo se
+    // ignorara en silencio, seguiría ahí esperando a que alguien cambie el
+    // NODE_ENV de un contenedor.
+    expect(() => loadEnv({ ...PRODUCTION, DEV_ADMIN_EMAIL: 'ana@vivo.uy' })).toThrowError(
+      /solo funciona en desarrollo/,
+    );
+  });
+
+  it('tampoco arranca apuntando a una base real, aunque no sea producción', () => {
+    expect(() =>
+      loadEnv({
+        ...BASE,
+        DATA_DRIVER: 'postgres',
+        DATABASE_URL: 'postgresql://vivo:vivo@localhost:5432/vivo',
+        DEV_ADMIN_EMAIL: 'ana@vivo.uy',
+      }),
+    ).toThrowError(/solo funciona en desarrollo/);
+  });
+
+  it('un valor que no es un correo se rechaza', () => {
+    expect(() => loadEnv({ ...BASE, DEV_ADMIN_EMAIL: 'todos' })).toThrow();
   });
 });

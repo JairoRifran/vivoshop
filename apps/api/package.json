@@ -17,6 +17,7 @@
     "db:migrate": "tsx src/infrastructure/persistence/drizzle/migrate.ts",
     "db:seed": "tsx src/infrastructure/persistence/drizzle/seed.ts",
     "db:clear": "tsx src/infrastructure/persistence/drizzle/clear.ts",
+    "db:grant-admin": "tsx src/infrastructure/persistence/drizzle/grant-admin.ts",
     "clean": "rimraf dist .turbo *.tsbuildinfo",
     "db:smoke": "tsx src/infrastructure/persistence/drizzle/smoke.ts"
   },

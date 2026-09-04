@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { RealtimeModule } from '../infrastructure/realtime/realtime.module';
+import { AdminService } from './services/admin.service';
 import { AnalyticsService } from './services/analytics.service';
 import { BidService } from './services/bid.service';
 import { BidViewService } from './services/bid-view.service';
@@ -38,6 +39,7 @@ const SERVICES = [
   ProtectionService,
   BidService,
   BidViewService,
+  AdminService,
 ];
 
 /**

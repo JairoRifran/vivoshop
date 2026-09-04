@@ -23,6 +23,7 @@
     "db:migrate": "pnpm --filter @vivo/api db:migrate",
     "db:seed": "pnpm --filter @vivo/api db:seed",
     "db:clear": "pnpm --filter @vivo/api db:clear",
+    "db:grant-admin": "pnpm --filter @vivo/api db:grant-admin",
     "clean": "turbo run clean && rimraf node_modules",
     "test:e2e:install": "pnpm --filter @vivo/web exec playwright install --with-deps chromium",
     "db:smoke": "pnpm --filter @vivo/api db:smoke"

@@ -1,4 +1,5 @@
 import type { AnalyticsEvent } from './analytics';
+import type { AdminOverviewDto } from './schemas/admin';
 import { ApiError, type ApiErrorBody } from './errors';
 import type {
   CheckoutPreviewDto,
@@ -77,17 +78,28 @@ function buildUrl(baseUrl: string, path: string, query?: Query): string {
 export function createApiClient(options: ApiClientOptions) {
   const doFetch = options.fetch ?? globalThis.fetch;
 
-  async function request<T>(
+  /**
+   * El viaje de ida y vuelta, sin interpretar el cuerpo.
+   *
+   * Existe porque no todo lo que devuelve la API es JSON: los reportes del
+   * panel del dueno bajan como CSV. Antes de separarlo, `request` parseaba
+   * siempre, asi que un CSV volvia como `null` silencioso. La autenticacion, el
+   * armado de la URL y el error de red viven aca una sola vez: duplicarlos para
+   * un segundo tipo de respuesta es como se termina con dos formas distintas de
+   * mandar el token.
+   */
+  async function send(
     method: string,
     path: string,
-    body?: unknown,
-    init: RequestInit & { query?: Query } = {},
-  ): Promise<T> {
+    body: unknown,
+    init: RequestInit & { query?: Query },
+    accept: string,
+  ): Promise<{ response: Response; text: string }> {
     const { query, ...restInit } = init;
     const token = options.getToken ? await options.getToken() : null;
 
     const headers = new Headers({
-      Accept: 'application/json',
+      Accept: accept,
       ...(options.defaultInit?.headers as Record<string, string> | undefined),
       ...(restInit.headers as Record<string, string> | undefined),
     });
@@ -111,9 +123,19 @@ export function createApiClient(options: ApiClientOptions) {
       });
     }
 
+    const text = response.status === 204 ? '' : await response.text();
+    return { response, text };
+  }
+
+  async function request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    init: RequestInit & { query?: Query } = {},
+  ): Promise<T> {
+    const { response, text } = await send(method, path, body, init, 'application/json');
     if (response.status === 204) return undefined as T;
 
-    const text = await response.text();
     const payload: unknown = text ? safeJson(text) : null;
 
     if (!response.ok) {
@@ -127,8 +149,39 @@ export function createApiClient(options: ApiClientOptions) {
     return payload as T;
   }
 
+  /**
+   * Igual que `request`, pero devuelve el cuerpo tal cual.
+   *
+   * El error sigue llegando como JSON aunque se haya pedido texto: si algo sale
+   * mal, la API responde su cuerpo de error de siempre, no un CSV.
+   */
+  async function requestText(
+    method: string,
+    path: string,
+    init: RequestInit & { query?: Query } = {},
+  ): Promise<string> {
+    const { response, text } = await send(method, path, undefined, init, 'text/csv');
+    if (!response.ok) {
+      const payload: unknown = text ? safeJson(text) : null;
+      const errorBody: ApiErrorBody = isErrorBody(payload)
+        ? payload
+        : { code: 'UNKNOWN_ERROR', message: response.statusText || 'Error inesperado' };
+      throw new ApiError(response.status, errorBody);
+    }
+    return text;
+  }
+
   return {
     request,
+    requestText,
+
+    admin: {
+      overview: (query?: Query, init?: RequestInit) =>
+        request<AdminOverviewDto>('GET', '/admin/overview', undefined, { ...init, query }),
+      /** El CSV crudo. Quien llama decide si lo guarda o lo reenvia. */
+      reporte: (tipo: 'pedidos' | 'cobros', query?: Query, init?: RequestInit) =>
+        requestText('GET', `/admin/reportes/${tipo}.csv`, { ...init, query }),
+    },
 
     auth: {
       register: (input: RegisterRequest) => request<SessionDto>('POST', '/auth/register', input),

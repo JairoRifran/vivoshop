@@ -1,8 +1,22 @@
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_CHECKOUT_RESERVATION_SECONDS } from '@vivo/domain';
 import { loadEncryptionKeys } from '../infrastructure/crypto/secret-box';
+
+/** La raíz del monorepo, subiendo desde este archivo hasta `pnpm-workspace.yaml`. */
+function workspaceEnvFile(): string | null {
+  let directory = __dirname;
+  for (let hop = 0; hop < 8; hop += 1) {
+    if (existsSync(resolve(directory, 'pnpm-workspace.yaml'))) {
+      return resolve(directory, '.env');
+    }
+    const parent = dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+  return null;
+}
 
 /**
  * Loads `.env` from the repository root, then from this app, without adding a
@@ -16,7 +30,17 @@ function loadDotEnvFiles(): void {
     resolve(process.cwd(), '.env'),
     resolve(process.cwd(), '../../.env'),
     resolve(process.cwd(), '../../../.env'),
+    // Y por último, la raíz del workspace buscada desde este archivo.
+    //
+    // Los tres candidatos de arriba salen de `process.cwd()`, que sirve mientras
+    // el proceso arranque desde adentro del repositorio —lo que hace `pnpm dev`,
+    // con cwd en `apps/api`—. Pero `node apps/api/dist/main.js` lanzado desde un
+    // directorio de más arriba es una forma perfectamente normal de arrancar un
+    // servicio, y ahí ninguno de los tres acierta: el `.env` se ignora entero y
+    // en silencio, y lo que sea que tenga adentro parece no tener efecto.
+    workspaceEnvFile(),
   ]) {
+    if (!candidate) continue;
     if (!existsSync(candidate)) continue;
     try {
       process.loadEnvFile(candidate);
@@ -39,6 +63,21 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
 
   DATA_DRIVER: z.enum(['memory', 'postgres']).default('memory'),
+  /**
+   * Le da el rol `admin` a esta cuenta al sembrar, para poder abrir `/admin` en
+   * desarrollo.
+   *
+   * Existe porque `pnpm db:grant-admin` escribe en PostgreSQL y el desarrollo
+   * corre con `DATA_DRIVER=memory`, que se rearma en cada arranque: sin esto no
+   * hay ninguna forma de entrar al panel local.
+   *
+   * Es una segunda via de privilegio, que es exactamente lo que M13 dice que
+   * hay que evitar. Se banca solo porque esta cerrada por los dos lados:
+   * `loadEnv` la rechaza si `NODE_ENV=production` o si el driver es `postgres`,
+   * y el unico codigo que la lee es el arranque del driver en memoria. Contra
+   * una base de verdad no hace nada aunque este puesta.
+   */
+  DEV_ADMIN_EMAIL: z.string().email().optional(),
   CACHE_DRIVER: z.enum(['memory', 'redis']).default('memory'),
 
   DATABASE_URL: z.string().optional(),
@@ -98,8 +137,16 @@ const envSchema = z.object({
   LIVEKIT_API_SECRET: z.string().optional(),
   LIVEKIT_MAX_PARTICIPANTS: z.coerce.number().int().min(2).default(3000),
   /** Broadcaster credentials outlive a long live; viewers refresh cheaply. */
-  LIVEKIT_BROADCASTER_TTL_SECONDS: z.coerce.number().int().min(300).default(6 * 3600),
-  LIVEKIT_VIEWER_TTL_SECONDS: z.coerce.number().int().min(300).default(2 * 3600),
+  LIVEKIT_BROADCASTER_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .default(6 * 3600),
+  LIVEKIT_VIEWER_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .default(2 * 3600),
 
   // --- Cobros (M03) -----------------------------------------------------
   /**
@@ -338,6 +385,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (env.DATA_DRIVER === 'postgres' && !env.DATABASE_URL) {
     throw new Error('DATA_DRIVER=postgres requires DATABASE_URL');
   }
+  // Falla al arrancar, no en silencio: una comodidad de desarrollo que reparte
+  // permisos tiene que ser imposible de dejar puesta sin querer en un deploy.
+  if (env.DEV_ADMIN_EMAIL && (env.NODE_ENV === 'production' || env.DATA_DRIVER === 'postgres')) {
+    throw new Error(
+      'DEV_ADMIN_EMAIL solo funciona en desarrollo con DATA_DRIVER=memory. ' +
+        'Contra una base real, otorgá el rol con `pnpm db:grant-admin`.',
+    );
+  }
   if (env.CACHE_DRIVER === 'redis' && !env.REDIS_URL) {
     throw new Error('CACHE_DRIVER=redis requires REDIS_URL');
   }
@@ -407,9 +462,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     );
   }
   if (env.NOTIFICATION_PROVIDER === 'webpush') {
-    const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter(
-      (key) => !env[key],
-    );
+    const missing = (['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] as const).filter((key) => !env[key]);
     if (missing.length > 0) {
       throw new Error(
         `NOTIFICATION_PROVIDER=webpush requires ${missing.join(', ')}. ` +
@@ -442,7 +495,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   // no es teórico: con un `.env` apuntando a Supabase, `pnpm test` escribió
   // datos de prueba en la base desplegada y pasó en verde. Falla ruidosamente
   // en vez de escribir donde no debe.
-  if (env.NODE_ENV === 'test' && env.DATA_DRIVER === 'postgres' && !isLocalDatabase(env.DATABASE_URL)) {
+  if (
+    env.NODE_ENV === 'test' &&
+    env.DATA_DRIVER === 'postgres' &&
+    !isLocalDatabase(env.DATABASE_URL)
+  ) {
     throw new Error(
       'Refusing to run tests against a remote database. ' +
         `DATABASE_URL points at ${hostOf(env.DATABASE_URL)}; tests use DATA_DRIVER=memory.`,
