@@ -25,6 +25,7 @@ import {
   graceExpired,
   isFinished,
   sanitizeMessageBody,
+  hideFromBlocked,
   type LiveChannel,
   type UserId as DomainUserId,
 } from '@vivo/domain';
@@ -55,6 +56,7 @@ import type {
 } from '../ports/repositories';
 import { ENV, type AppEnv } from '../../config/env';
 import { NotificationService } from './notification.service';
+import { ModerationService } from './moderation.service';
 import {
   CLOCK,
   FOLLOW_REPOSITORY,
@@ -85,6 +87,7 @@ export class LiveService {
     @Inject(PRESENCE_STORE) private readonly presence: PresenceStore,
     @Inject(STREAMING_PROVIDER) private readonly streaming: StreamingProvider,
     private readonly notifications: NotificationService,
+    private readonly moderation: ModerationService,
     @Inject(REALTIME_PUBLISHER) private readonly realtime: RealtimePublisher,
     @Inject(ENV) private readonly env: AppEnv,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -139,10 +142,27 @@ export class LiveService {
     return toLiveDetailDto(session, context);
   }
 
-  async listMessages(id: LiveSessionId, limit = 50): Promise<LiveMessageDto[]> {
+  /**
+   * El historial del chat, sin quien el espectador tenga bloqueado.
+   *
+   * El filtro va acá y no en la consulta: los mensajes que llegan después por
+   * WebSocket no pasan por la base, y la misma regla tiene que valer para el
+   * historial y para lo que aparece mientras mirás. Por eso `hideFromBlocked`
+   * es una función pura del dominio —la web la vuelve a aplicar sobre lo que
+   * entra por el socket—; si viviera solo en un `where`, el bloqueo duraría
+   * hasta que la otra persona escribiera de nuevo.
+   */
+  async listMessages(
+    id: LiveSessionId,
+    limit = 50,
+    viewerId?: UserId | null,
+  ): Promise<LiveMessageDto[]> {
     await this.requireSession(id);
     const messages = await this.messages.listBySession(id, limit);
-    return messages.map(toMessageDto);
+    if (!viewerId) return messages.map(toMessageDto);
+
+    const blocked = await this.moderation.blockedIds(viewerId);
+    return hideFromBlocked(messages, blocked).map(toMessageDto);
   }
 
   async postMessage(id: LiveSessionId, author: User, body: string): Promise<LiveMessageDto> {

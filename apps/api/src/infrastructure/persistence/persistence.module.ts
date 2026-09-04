@@ -28,6 +28,7 @@ import {
 } from '../../application/ports/tokens';
 import { BID_REPOSITORY, BID_TRANSACTION_RUNNER } from '../../application/ports/bids';
 import { METRICS_REPOSITORY } from '../../application/ports/metrics';
+import { MODERATION_REPOSITORY } from '../../application/ports/moderation';
 import {
   DISPUTE_REPOSITORY,
   OAUTH_STATE_REPOSITORY,
@@ -41,8 +42,10 @@ import { DRIZZLE, createDatabase } from './drizzle/client';
 import { DrizzleOrderTransactionRunner } from './drizzle/drizzle.order-transaction';
 import { DrizzleBidRepository, DrizzleBidTransactionRunner } from './drizzle/drizzle.bids';
 import { DrizzleMetricsRepository } from './drizzle/drizzle.metrics';
+import { DrizzleModerationRepository } from './drizzle/drizzle.moderation';
 import { MemoryBidRepository, MemoryBidTransactionRunner } from './memory/memory.bids';
 import { MemoryMetricsRepository } from './memory/memory.metrics';
+import { MemoryModerationRepository } from './memory/memory.moderation';
 import {
   DrizzleDisputeRepository,
   DrizzleOAuthStateRepository,
@@ -120,6 +123,7 @@ const REPOSITORY_TOKENS = [
   BID_REPOSITORY,
   BID_TRANSACTION_RUNNER,
   METRICS_REPOSITORY,
+  MODERATION_REPOSITORY,
 ];
 
 const POOL = Symbol('PgPool');
@@ -161,6 +165,7 @@ const POOL = Symbol('PgPool');
     { provide: BID_REPOSITORY, useClass: MemoryBidRepository },
     { provide: BID_TRANSACTION_RUNNER, useClass: MemoryBidTransactionRunner },
     { provide: METRICS_REPOSITORY, useClass: MemoryMetricsRepository },
+    { provide: MODERATION_REPOSITORY, useClass: MemoryModerationRepository },
   ],
   exports: [...REPOSITORY_TOKENS, MemoryDatabase],
 })
@@ -281,6 +286,7 @@ export class MemoryPersistenceModule implements OnModuleInit {
     { provide: BID_REPOSITORY, useClass: DrizzleBidRepository },
     { provide: BID_TRANSACTION_RUNNER, useClass: DrizzleBidTransactionRunner },
     { provide: METRICS_REPOSITORY, useClass: DrizzleMetricsRepository },
+    { provide: MODERATION_REPOSITORY, useClass: DrizzleModerationRepository },
   ],
   exports: [...REPOSITORY_TOKENS, DRIZZLE],
 })

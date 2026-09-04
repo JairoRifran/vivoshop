@@ -1,5 +1,11 @@
 import type { AnalyticsEvent } from './analytics';
 import type { AdminOverviewDto } from './schemas/admin';
+import type {
+  BlockedPersonDto,
+  CreateReportRequest,
+  ReportDto,
+  ResolveReportRequest,
+} from './schemas/moderation';
 import { ApiError, type ApiErrorBody } from './errors';
 import type {
   CheckoutPreviewDto,
@@ -175,7 +181,20 @@ export function createApiClient(options: ApiClientOptions) {
     request,
     requestText,
 
+    /** Denunciar y bloquear. Ver la política de contenido de usuarios (M14). */
+    moderation: {
+      report: (input: CreateReportRequest) => request<ReportDto>('POST', '/reports', input),
+      block: (userId: string) => request<void>('POST', `/users/${userId}/block`),
+      unblock: (userId: string) => request<void>('DELETE', `/users/${userId}/block`),
+      blocked: (init?: RequestInit) =>
+        request<BlockedPersonDto[]>('GET', '/me/blocks', undefined, init),
+    },
+
     admin: {
+      reports: (query?: Query, init?: RequestInit) =>
+        request<ReportDto[]>('GET', '/admin/reports', undefined, { ...init, query }),
+      resolveReport: (id: string, input: ResolveReportRequest) =>
+        request<ReportDto>('POST', `/admin/reports/${id}/resolve`, input),
       overview: (query?: Query, init?: RequestInit) =>
         request<AdminOverviewDto>('GET', '/admin/overview', undefined, { ...init, query }),
       /** El CSV crudo. Quien llama decide si lo guarda o lo reenvia. */

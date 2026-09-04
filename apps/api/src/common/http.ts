@@ -52,6 +52,11 @@ export const zodPipe = <T>(schema: ZodType<T>) => new ZodValidationPipe(schema);
 
 /** Domain failures carry meaning; the transport only has to pick a status. */
 const DOMAIN_STATUS: Partial<Record<DomainErrorCode, HttpStatus>> = {
+  // Moderación (M14). Los tres son conflictos de estado, no cuerpos inválidos:
+  // el pedido está bien formado y aun así no se puede hacer.
+  CANNOT_BLOCK_SELF: HttpStatus.CONFLICT,
+  CANNOT_REPORT_SELF: HttpStatus.CONFLICT,
+  REPORT_ALREADY_RESOLVED: HttpStatus.CONFLICT,
   OUT_OF_STOCK: HttpStatus.CONFLICT,
   PRODUCT_NOT_PURCHASABLE: HttpStatus.CONFLICT,
   STORE_NOT_ACTIVE: HttpStatus.CONFLICT,

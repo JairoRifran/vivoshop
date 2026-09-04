@@ -4,6 +4,7 @@ import type { LiveMessageDto } from '@vivo/shared';
 import { cn } from '@vivo/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { ReportSheet } from '../report-sheet';
 
 /**
  * Chat overlay.
@@ -15,6 +16,16 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 export function LiveChatOverlay({ messages }: { messages: LiveMessageDto[] }) {
   const listRef = useRef<HTMLUListElement>(null);
   const visible = messages.slice(-14);
+  /**
+   * Sobre qué mensaje se abrió la hoja de denuncia.
+   *
+   * El disparador es el nombre de quien escribió, no un icono aparte: en un
+   * video a pantalla completa cada píxel de la superposición compite con lo que
+   * se está mostrando, y un botón por mensaje llenaría el chat de puntitos. El
+   * nombre ya está ahí, ya es lo que identifica a la persona, y lleva su propia
+   * etiqueta accesible para que se entienda que se puede tocar.
+   */
+  const [elegido, setElegido] = useState<LiveMessageDto | null>(null);
 
   useEffect(() => {
     const list = listRef.current;
@@ -40,14 +51,37 @@ export function LiveChatOverlay({ messages }: { messages: LiveMessageDto[] }) {
           key={message.id}
           className="flex animate-rise items-start gap-2 motion-reduce:animate-none"
         >
-          <span className="mt-0.5 shrink-0 text-[13px] font-bold text-white/70">
-            {message.authorName.split(' ')[0]}
-          </span>
+          {message.authorId ? (
+            <button
+              type="button"
+              onClick={() => setElegido(message)}
+              aria-label={`Denunciar o bloquear a ${message.authorName}`}
+              className="mt-0.5 shrink-0 text-[13px] font-bold text-white/70 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              {message.authorName.split(' ')[0]}
+            </button>
+          ) : (
+            // Los avisos de la aplicación no los escribió nadie: no hay a quién
+            // denunciar ni a quién bloquear.
+            <span className="mt-0.5 shrink-0 text-[13px] font-bold text-white/70">
+              {message.authorName.split(' ')[0]}
+            </span>
+          )}
           <span className="text-pretty text-[13px] leading-snug text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
             {message.body}
           </span>
         </li>
       ))}
+      {elegido ? (
+        <ReportSheet
+          open
+          onClose={() => setElegido(null)}
+          target="live_message"
+          targetId={elegido.id}
+          authorId={elegido.authorId}
+          authorName={elegido.authorName}
+        />
+      ) : null}
     </ul>
   );
 }

@@ -37,6 +37,8 @@ export async function clearDatabase(db: VivoDatabase): Promise<void> {
   await db.transaction(async (tx) => {
     // --- Hojas: lo que cuelga de pedidos, pagos, pujas y vivos --------------
     await tx.delete(t.disputes);
+    await tx.delete(t.reports);
+    await tx.delete(t.blocks);
     await tx.delete(t.bids);
     await tx.delete(t.bidSessions);
     await tx.delete(t.paymentWebhookEvents);

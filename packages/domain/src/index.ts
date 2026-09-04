@@ -19,6 +19,7 @@ export * from './entities/seller-payment-account';
 export * from './entities/verification';
 export * from './entities/social';
 export * from './entities/realtime';
+export * from './entities/moderation';
 export * from './services/tax';
 export * from './services/idempotency';
 export * from './services/pricing';

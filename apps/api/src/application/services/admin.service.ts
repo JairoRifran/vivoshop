@@ -11,6 +11,7 @@ import {
   type ReportPage,
 } from '../ports/metrics';
 import { CLOCK } from '../ports/tokens';
+import { ModerationService } from './moderation.service';
 
 /** Cuántos días atrás mira el panel si no se pide otra cosa. */
 const DIAS_POR_DEFECTO = 30;
@@ -30,18 +31,22 @@ export class AdminService {
   constructor(
     @Inject(METRICS_REPOSITORY) private readonly metrics: MetricsRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly moderation: ModerationService,
   ) {}
 
   async overview(diasPedidos?: number): Promise<AdminOverviewDto> {
     const dias = normalizarDias(diasPedidos);
     const window = this.ventana(dias);
 
-    const [revenue, serie, vivo, crecimiento, atencion] = await Promise.all([
+    const [revenue, serie, vivo, crecimiento, atencion, denunciasAbiertas] = await Promise.all([
       this.metrics.revenue(window),
       this.metrics.revenueByDay(window),
       this.metrics.liveImpact(window),
       this.metrics.growth(window),
       this.metrics.attention(DIAS_TRABADO, window.hasta),
+      // Va con "para atender" y no con las métricas: no es una cuenta del
+      // negocio, es trabajo pendiente. Y sale de otro puerto.
+      this.moderation.countOpen(),
     ]);
 
     return {
@@ -71,6 +76,7 @@ export class AdminService {
         diasTrabado: atencion.diasTrabado,
         pagosFallidos: atencion.pagosFallidos,
         verificacionesPendientes: atencion.verificacionesPendientes,
+        denunciasAbiertas,
         pedidosPorEstado: { ...atencion.pedidosPorEstado },
         disputasPorEstado: { ...atencion.disputasPorEstado },
       },

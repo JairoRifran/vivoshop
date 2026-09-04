@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { StoreRow } from '@/components/cards';
 import { BagIcon, BroadcastIcon, ChevronRightIcon, StoreIcon, UserIcon } from '@/components/icons';
+import { BlockedList } from '@/components/blocked-list';
 import { SignOutButton } from '@/components/sign-out-button';
 import { api, getCurrentUser, safe } from '@/lib/api';
 
@@ -42,10 +43,11 @@ export default async function ProfilePage() {
   }
 
   const client = await api();
-  const [following, store, orders] = await Promise.all([
+  const [following, store, orders, bloqueadas] = await Promise.all([
     safe(client.stores.following(), []),
     safe(client.stores.mine(), null),
     safe(client.orders.mine(), []),
+    safe(client.moderation.blocked(), []),
   ]);
 
   const isSeller = user.roles.includes('seller');
@@ -154,6 +156,17 @@ export default async function ProfilePage() {
           <ChevronRightIcon className="size-5 shrink-0 text-subtle" />
         </Link>
         <SignOutButton />
+      </section>
+
+      {/*
+        Las cuentas bloqueadas viven acá y no escondidas en un submenú.
+        La política de contenido generado por usuarios de Play pide que se pueda
+        bloquear; que se pueda encontrar lo que uno bloqueó lo pide cualquiera
+        que se haya arrepentido.
+      */}
+      <section className="flex flex-col gap-2 px-4">
+        <h2 className="text-[17px] font-extrabold tracking-tight">Cuentas bloqueadas</h2>
+        <BlockedList people={bloqueadas} />
       </section>
 
       {/*

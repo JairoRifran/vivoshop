@@ -773,6 +773,67 @@ export const disputes = pgTable('disputes', {
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
 
+// --- Moderación (M14) --------------------------------------------------------
+
+/**
+ * Denuncias de contenido.
+ *
+ * `target` + `target_id` en vez de una columna por tipo: se puede denunciar un
+ * mensaje del chat, un producto, una tienda o una cuenta, y agregar un tipo más
+ * no debería ser una migración. El precio es que no hay clave foránea hacia lo
+ * denunciado —no se puede referenciar cuatro tablas desde una columna—, así que
+ * una denuncia puede sobrevivir a lo que denuncia. Es aceptable: la cola de
+ * moderación tiene que poder mostrar "esto ya no existe" en vez de perder el
+ * registro de que alguien se quejó.
+ */
+export const reports = pgTable(
+  'reports',
+  {
+    id: text('id').primaryKey(),
+    reporterId: text('reporter_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    target: text('target').notNull(),
+    targetId: text('target_id').notNull(),
+    reason: text('reason').notNull(),
+    detail: text('detail').notNull().default(''),
+    status: text('status').notNull().default('open'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: text('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    // La cola de moderación siempre pide lo abierto, de lo más viejo a lo más
+    // nuevo: sin este índice es un scan de la tabla entera en cada carga.
+    index('reports_status_created_idx').on(table.status, table.createdAt),
+    index('reports_target_idx').on(table.target, table.targetId),
+  ],
+);
+
+/**
+ * Quién no quiere ver a quién.
+ *
+ * Clave primaria compuesta: bloquear dos veces a la misma persona es la misma
+ * fila, no dos. Eso hace que el botón sea idempotente sin que la aplicación
+ * tenga que comprobar antes de insertar.
+ *
+ * `cascade` en los dos lados: es una preferencia personal, no un registro que
+ * valga conservar cuando alguna de las dos cuentas ya no está.
+ */
+export const blocks = pgTable(
+  'blocks',
+  {
+    blockerId: text('blocker_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    blockedId: text('blocked_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.blockerId, table.blockedId] })],
+);
+
 export const schema = {
   users,
   pushSubscriptions,
@@ -798,6 +859,8 @@ export const schema = {
   businessVerifications,
   identityVerifications,
   disputes,
+  reports,
+  blocks,
   bidSessions,
   bids,
 };

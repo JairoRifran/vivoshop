@@ -275,7 +275,8 @@ function Atender({ datos }: { datos: AdminOverviewDto }) {
     a.disputasAbiertas === 0 &&
     a.pedidosTrabados === 0 &&
     a.pagosFallidos === 0 &&
-    a.verificacionesPendientes === 0;
+    a.verificacionesPendientes === 0 &&
+    a.denunciasAbiertas === 0;
 
   return (
     <Seccion titulo="Para atender" nota="Cosas que esperan algo tuyo">
@@ -296,6 +297,16 @@ function Atender({ datos }: { datos: AdminOverviewDto }) {
           />
           <Cifra etiqueta="Pagos rechazados" valor={String(a.pagosFallidos)} />
           <Cifra etiqueta="Verificaciones" valor={String(a.verificacionesPendientes)} />
+          {/* Las denuncias van acá y no en una pantalla aparte: la política de
+              contenido de usuarios de Play no pide solo el botón de denunciar,
+              pide que alguien las mire. Si no aparecen donde mirás todos los
+              días, no las mira nadie. */}
+          <Cifra
+            etiqueta="Denuncias"
+            valor={String(a.denunciasAbiertas)}
+            nota="Contenido reportado sin revisar"
+            tono={a.denunciasAbiertas > 0 ? 'alerta' : undefined}
+          />
         </div>
       )}
 

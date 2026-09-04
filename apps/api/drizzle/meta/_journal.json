@@ -85,6 +85,13 @@
       "when": 1788357760518,
       "tag": "0011_past_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788532786912,
+      "tag": "0012_soft_sir_ram",
+      "breakpoints": true
     }
   ]
 }

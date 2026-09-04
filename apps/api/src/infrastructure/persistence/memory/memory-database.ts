@@ -22,6 +22,7 @@ import type {
 } from '@vivo/domain';
 import type { LoginState } from '../../../application/ports/repositories';
 import { buildDemoDataset, type DemoDataset } from '@vivo/seed';
+import type { Block, Report } from '@vivo/domain';
 import type { StoredAnalyticsEvent } from '../../../application/ports/repositories';
 
 /**
@@ -81,6 +82,10 @@ export class MemoryDatabase {
   readonly businessVerifications = new Map<string, BusinessVerification>();
   readonly identityVerifications = new Map<string, IdentityVerification>();
   readonly disputes = new Map<string, Dispute>();
+  /** Denuncias de contenido (M14). */
+  readonly reports = new Map<string, Report>();
+  /** `${blockerId}|${blockedId}` → cuándo. Ver `blocks` en el esquema. */
+  readonly blocks = new Map<string, Block>();
 
   // --- Modo Puja (M04) ------------------------------------------------------
   readonly bidSessions = new Map<string, BidSession>();
@@ -165,6 +170,8 @@ export class MemoryDatabase {
     this.businessVerifications.clear();
     this.identityVerifications.clear();
     this.disputes.clear();
+    this.reports.clear();
+    this.blocks.clear();
     this.bidSessions.clear();
     this.bids.clear();
     this.seeded = false;

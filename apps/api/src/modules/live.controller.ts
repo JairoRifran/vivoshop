@@ -75,10 +75,20 @@ export class LiveController {
     return this.live.detail(asLiveSessionId(id), user?.id ?? null);
   }
 
-  @Public()
+  // `@OptionalAuth` y no `@Public`: el chat se puede mirar sin cuenta, pero con
+  // sesión hay que resolver quién mira para esconder a quien tenga bloqueado.
+  @OptionalAuth()
   @Get(':id/messages')
-  messages(@Param('id') id: string, @Query('limit') limit?: string): Promise<LiveMessageDto[]> {
-    return this.live.listMessages(asLiveSessionId(id), limit ? Number(limit) : undefined);
+  messages(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser | null,
+    @Query('limit') limit?: string,
+  ): Promise<LiveMessageDto[]> {
+    return this.live.listMessages(
+      asLiveSessionId(id),
+      limit ? Number(limit) : undefined,
+      user?.id ?? null,
+    );
   }
 
   @Post(':id/messages')

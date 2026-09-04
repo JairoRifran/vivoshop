@@ -71,6 +71,8 @@ export const adminOverviewSchema = z.object({
     diasTrabado: z.number().int(),
     pagosFallidos: z.number().int(),
     verificacionesPendientes: z.number().int(),
+    /** Denuncias de contenido sin resolver (M14). */
+    denunciasAbiertas: z.number().int(),
     pedidosPorEstado: z.record(z.string(), z.number().int()),
     disputasPorEstado: z.record(z.string(), z.number().int()),
   }),

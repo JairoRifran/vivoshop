@@ -56,6 +56,11 @@ export type DomainErrorCode =
   | 'VERIFICATION_DETAILS_INCOMPLETE'
   /** The protection cannot move to that status from where it is. */
   | 'INVALID_PROTECTION_TRANSITION'
+  // Moderación (M14): denunciar y bloquear.
+  | 'CANNOT_BLOCK_SELF'
+  | 'CANNOT_REPORT_SELF'
+  | 'REPORT_DETAIL_TOO_LONG'
+  | 'REPORT_ALREADY_RESOLVED'
   // --- Modo Puja (M04) ---------------------------------------------------
   /** The bid session cannot move to that status from where it is. */
   | 'INVALID_BID_SESSION_TRANSITION'
